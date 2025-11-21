@@ -25,8 +25,8 @@ class LandingScreen extends StatelessWidget {
                       children: [
                         // Logo
                         SizedBox(
-                          width: 400,
-                          height: 400,
+                          width: 180,
+                          height: 180,
                           child: Image.asset(
                             'assets/images/logo.png',
                             fit: BoxFit.contain,
@@ -36,9 +36,9 @@ class LandingScreen extends StatelessWidget {
                                   'intersection',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    fontSize: 28,
+                                    fontSize: 24,
                                     fontWeight: FontWeight.bold,
-                                    color: theme.colorScheme.onBackground,
+                                    color: theme.colorScheme.onSurface,
                                   ),
                                 ),
                               );
@@ -53,7 +53,7 @@ class LandingScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w800,
-                            color: theme.colorScheme.onBackground,
+                            color: theme.colorScheme.onSurface,
                             letterSpacing: -0.5,
                           ),
                         ),
@@ -64,7 +64,7 @@ class LandingScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
-                            color: theme.colorScheme.onBackground.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                             letterSpacing: 1.2,
                           ),
                         ),
@@ -76,7 +76,7 @@ class LandingScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 17,
                             height: 1.6,
-                            color: theme.colorScheme.onBackground.withOpacity(0.65),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                             fontWeight: FontWeight.w400,
                           ),
                         ),

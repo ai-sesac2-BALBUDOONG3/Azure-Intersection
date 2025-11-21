@@ -9,6 +9,7 @@ import 'package:intersection/screens/signup_step1_screen.dart';
 import 'package:intersection/screens/signup_step2_screen.dart';
 import 'package:intersection/screens/signup_step3_screen.dart';
 import 'package:intersection/screens/signup_step4_screen.dart';
+import 'package:intersection/screens/recommended_screen.dart';
 
 void main() {
   runApp(const IntersectionApp());
@@ -163,6 +164,10 @@ class IntersectionApp extends StatelessWidget {
           case '/login':
             return MaterialPageRoute(
               builder: (_) => const LandingScreen(),
+            );
+          case '/recommended':
+            return MaterialPageRoute(
+              builder: (_) => const RecommendedFriendsScreen(),
             );
           default:
             return _errorRoute('존재하지 않는 페이지입니다.');

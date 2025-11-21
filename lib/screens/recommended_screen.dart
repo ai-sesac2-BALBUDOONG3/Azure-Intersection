@@ -57,7 +57,7 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
       body: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _friends.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final f = _friends[index];
           return _FriendCard(

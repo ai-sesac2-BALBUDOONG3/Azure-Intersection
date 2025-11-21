@@ -175,7 +175,7 @@ class _SignupStep3ScreenState extends State<SignupStep3Screen> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: selectedGender,
+                    initialValue: selectedGender,
                     hint: const Text('성별을 선택해주세요'),
                     items: genders
                         .map(
@@ -202,7 +202,7 @@ class _SignupStep3ScreenState extends State<SignupStep3Screen> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: selectedRegion,
+                    initialValue: selectedRegion,
                     hint: const Text('지역을 선택해주세요'),
                     items: regions
                         .map(

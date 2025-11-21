@@ -32,12 +32,22 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     final cleaned = value.replaceAll('-', '').replaceAll(' ', '');
     String formatted = '';
 
-    if (cleaned.length <= 3) {
+    if (cleaned.isEmpty) {
+      formatted = '';
+    } else if (cleaned.length <= 3) {
       formatted = cleaned;
     } else if (cleaned.length <= 7) {
+      // 3- rest (up to 4)
       formatted = '${cleaned.substring(0, 3)}-${cleaned.substring(3)}';
     } else {
-      formatted = '${cleaned.substring(0, 3)}-${cleaned.substring(3, 7)}-${cleaned.substring(7, 11)}';
+      // For lengths 8..11, split as 3 - (len-7) - 4
+      final midEnd = cleaned.length - 4;
+      if (midEnd <= 3) {
+        // fallback to simple grouping
+        formatted = '${cleaned.substring(0, 3)}-${cleaned.substring(3)}';
+      } else {
+        formatted = '${cleaned.substring(0, 3)}-${cleaned.substring(3, midEnd)}-${cleaned.substring(midEnd)}';
+      }
     }
 
     _phoneController.value = TextEditingValue(
