@@ -11,6 +11,7 @@ import 'package:intersection/screens/signup_step3_screen.dart';
 import 'package:intersection/screens/signup_step4_screen.dart';
 import 'package:intersection/screens/recommended_screen.dart';
 import 'package:intersection/screens/login_screen.dart';
+import 'package:intersection/screens/friends_screen.dart';
 
 void main() {
   runApp(const IntersectionApp());
@@ -177,6 +178,12 @@ class IntersectionApp extends StatelessWidget {
           case '/recommended':
             return MaterialPageRoute(
               builder: (_) => const RecommendedFriendsScreen(),
+            );
+
+          // 🔥 친구 목록 라우트 추가됨
+          case '/friends':
+            return MaterialPageRoute(
+              builder: (_) => const FriendsScreen(),
             );
 
           default:

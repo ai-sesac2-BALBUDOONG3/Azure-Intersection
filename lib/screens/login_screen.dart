@@ -5,6 +5,7 @@ import 'package:intersection/config/api_config.dart';
 import 'package:intersection/data/app_state.dart';
 import 'package:intersection/screens/main_tab_screen.dart';
 import 'package:intersection/screens/signup_step1_screen.dart';
+import 'package:intersection/services/api_service.dart';  // ⭐ 추가
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -32,43 +33,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
-    final url = Uri.parse("${ApiConfig.baseUrl}/token");
-
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {
-          "username": email,
-          "password": password,
-        },
-      );
+      // -----------------------------------------
+      // 1) 로그인 → 토큰 획득
+      // -----------------------------------------
+      final token = await ApiService.login(email, password);
+
+      // 임시 저장
+      AppState.token = token;
+
+      // -----------------------------------------
+      // 2) 로그인 후 내 정보 불러오기
+      // -----------------------------------------
+      final user = await ApiService.getMyInfo();
+
+      // -----------------------------------------
+      // 3) AppState에 로그인 정보 적용
+      // -----------------------------------------
+      AppState.login(token, user);
 
       if (!mounted) return;
 
       setState(() => _isLoading = false);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        // 🔥 토큰 저장
-        AppState.login(data["access_token"]);
-
-        // 🔥 로그인 성공 → 메인 화면 이동
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const MainTabScreen()),
-          (route) => false,
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("로그인 실패: ${response.body}")),
-        );
-      }
+      // -----------------------------------------
+      // 4) 메인 화면 이동
+      // -----------------------------------------
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainTabScreen()),
+        (route) => false,
+      );
     } catch (e) {
       setState(() => _isLoading = false);
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("통신 오류: $e")),
+        SnackBar(content: Text("로그인 실패: $e")),
       );
     }
   }
@@ -82,8 +82,6 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-
-            /// 이메일 입력
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(
@@ -91,10 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 prefixIcon: Icon(Icons.email_outlined),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            /// 비밀번호 입력 + 보기/숨기기
             TextField(
               controller: _passwordController,
               obscureText: _obscurePassword,
@@ -115,10 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
-
-            /// 로그인 버튼
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -128,10 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     : const Text("로그인"),
               ),
             ),
-
             const SizedBox(height: 14),
-
-            /// 회원가입 이동
             TextButton(
               onPressed: () {
                 Navigator.push(
