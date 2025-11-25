@@ -14,8 +14,10 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
   late TextEditingController loginIdController;
   late TextEditingController passwordController;
   late TextEditingController passwordConfirmController;
+
   bool agreedToTerms = false;
   bool agreedToPrivacy = false;
+
   bool showPassword = false;
   bool showPasswordConfirm = false;
 
@@ -67,7 +69,7 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
       ),
       body: Column(
         children: [
-          // 진행도 표시
+          // 진행도 표시 (이제 1/3 로 변경)
           Padding(
             padding: const EdgeInsets.fromLTRB(24.0, 16.0, 24.0, 24.0),
             child: Column(
@@ -81,7 +83,7 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
                       style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     Text(
-                      '단계 1/4',
+                      '단계 1/3',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -94,17 +96,16 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 0.25),
+                    tween: Tween(begin: 0.0, end: 0.33),
                     duration: const Duration(milliseconds: 500),
                     curve: Curves.easeInOut,
-                    builder: (context, value, child) {
+                    builder: (_, value, __) {
                       return LinearProgressIndicator(
                         value: value,
                         minHeight: 6,
                         backgroundColor: Colors.grey[200],
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Colors.black,
-                        ),
+                        valueColor:
+                            const AlwaysStoppedAnimation<Color>(Colors.black),
                       );
                     },
                   ),
@@ -112,6 +113,7 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
               ],
             ),
           ),
+
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
@@ -128,7 +130,8 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
                     style: TextStyle(fontSize: 14, color: Colors.grey),
                   ),
                   const SizedBox(height: 32),
-                  // 이메일 입력
+
+                  // 이메일
                   const Text(
                     '이메일 (로그인 ID)',
                     style: TextStyle(fontWeight: FontWeight.w600),
@@ -148,10 +151,12 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
                           ? '올바른 이메일 형식을 입력해주세요'
                           : null,
                     ),
-                    onChanged: (value) => setState(() {}),
+                    onChanged: (_) => setState(() {}),
                   ),
+
                   const SizedBox(height: 20),
-                  // 비밀번호 입력
+
+                  // 비밀번호
                   const Text(
                     '비밀번호',
                     style: TextStyle(fontWeight: FontWeight.w600),
@@ -178,9 +183,11 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
                           ? '비밀번호는 8자 이상이어야 합니다'
                           : null,
                     ),
-                    onChanged: (value) => setState(() {}),
+                    onChanged: (_) => setState(() {}),
                   ),
+
                   const SizedBox(height: 20),
+
                   // 비밀번호 확인
                   const Text(
                     '비밀번호 확인',
@@ -209,38 +216,45 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
                           ? '비밀번호가 일치하지 않습니다'
                           : null,
                     ),
-                    onChanged: (value) => setState(() {}),
+                    onChanged: (_) => setState(() {}),
                   ),
+
                   const SizedBox(height: 24),
-                  // 약관 동의
+
+                  // 약관
                   CheckboxListTile(
                     value: agreedToTerms,
-                    onChanged: (value) =>
-                        setState(() => agreedToTerms = value ?? false),
+                    onChanged: (v) => setState(() => agreedToTerms = v ?? false),
                     title: const Text('서비스 이용약관 동의'),
                     controlAffinity: ListTileControlAffinity.leading,
                   ),
+
                   CheckboxListTile(
                     value: agreedToPrivacy,
-                    onChanged: (value) =>
-                        setState(() => agreedToPrivacy = value ?? false),
+                    onChanged: (v) =>
+                        setState(() => agreedToPrivacy = v ?? false),
                     title: const Text('개인정보 처리방침 동의'),
                     controlAffinity: ListTileControlAffinity.leading,
                   ),
+
                   const SizedBox(height: 32),
-                  // 다음 버튼
+
+                  // ⭐ Step2 삭제 → Step3로 바로 이동
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _canProceed()
                           ? () {
-                              final formData =
-                                  widget.initialData ?? SignupFormData();
-                              formData.loginId = loginIdController.text;
-                              formData.password = passwordController.text;
+                              final formData = (widget.initialData ??
+                                      SignupFormData())
+                                  .copyWith(
+                                loginId: loginIdController.text,
+                                password: passwordController.text,
+                              );
+
                               Navigator.pushNamed(
                                 context,
-                                '/signup/step2',
+                                '/signup/step3',
                                 arguments: formData,
                               );
                             }

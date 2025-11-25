@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import '../data/signup_form_data.dart';
 import '../services/api_service.dart';
+import '../models/user.dart';
+import '../data/app_state.dart';
+import '../data/user_storage.dart';
 import 'package:intersection/screens/main_tab_screen.dart';
 
 class SignupStep4Screen extends StatefulWidget {
@@ -79,7 +82,7 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
   Future<void> _submitSignup() async {
     final form = widget.data;
 
-    // 출생년도 검증 (백엔드 오류 방지)
+    // 출생년도 검증
     final birthYear = int.tryParse(form.birthYear);
     final currentYear = DateTime.now().year;
 
@@ -96,14 +99,7 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
       return;
     }
 
-    // 선택 항목 데이터 정리
-    final interestsList = interestsController.text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    // payload 생성 (백엔드 스키마에 맞게)
+    // payload 생성
     final payload = {
       'email': form.loginId,
       'password': form.password,
@@ -119,8 +115,22 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
     try {
       await ApiService.signup(payload);
 
-      // 회원가입 성공
       if (!mounted) return;
+
+      // 🔥 자동 로그인 처리
+      final newUser = User(
+        id: 0, // 실제 서버 ID는 API 응답 기반으로 수정 예정
+        name: form.name,
+        birthYear: birthYear,
+        region: form.baseRegion,
+        school: schoolNameController.text,
+      );
+
+      // 메모리 저장
+      AppState.currentUser = newUser;
+
+      // 로컬 저장 (웹이면 shared_preferences_web 사용됨)
+      await UserStorage.save(newUser);
 
       showDialog(
         context: context,
@@ -132,6 +142,7 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
               child: const Text('확인'),
               onPressed: () {
                 Navigator.pop(context);
+
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(
@@ -179,9 +190,10 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('학교 정보 입력',
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const Text(
+                    '학교 정보 입력',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 20),
 
                   // 학교급
@@ -241,10 +253,11 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
                   const SizedBox(height: 32),
                   const Divider(height: 32),
 
-                  // ===== 선택 항목 =====
-                  const Text('추가 정보 (선택사항)',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  // 선택 항목 UI (생략 없이 그대로 유지)
+                  const Text(
+                    '추가 정보 (선택사항)',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 20),
 
                   // 별명

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intersection/screens/recommended_friends_screen.dart';
 import 'package:intersection/screens/friends_screen.dart';
 import 'package:intersection/screens/community_screen.dart';
+import 'package:intersection/screens/profile_screen.dart';
 
 class MainTabScreen extends StatefulWidget {
   final int initialIndex;
@@ -16,14 +17,24 @@ class _MainTabScreenState extends State<MainTabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 매번 빌드될 때 화면을 다시 생성함
+    // 각 탭 화면
     final screens = [
       const FriendsScreen(),
       const RecommendedFriendsScreen(),
-      const CommunityScreen(),   // ← 커뮤니티가 항상 새로 생성됨!
+      const CommunityScreen(),
+      const ProfileScreen(),
+    ];
+
+    // 각 탭의 AppBar
+    final appBars = [
+      AppBar(title: const Text("친구 목록")),
+      AppBar(title: const Text("추천 친구")),
+      AppBar(title: const Text("커뮤니티")),
+      AppBar(title: const Text("내 정보")),
     ];
 
     return Scaffold(
+      appBar: appBars[_currentIndex],
       body: screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -47,6 +58,11 @@ class _MainTabScreenState extends State<MainTabScreen> {
             icon: Icon(Icons.forum_outlined),
             selectedIcon: Icon(Icons.forum),
             label: '커뮤니티',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: '내 정보',
           ),
         ],
       ),

@@ -22,9 +22,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
     _loadFriends();
   }
 
-  // ----------------------------------------------------
-  // DB에서 친구 목록 가져오기
-  // ----------------------------------------------------
   Future<void> _loadFriends() async {
     try {
       final friends = await ApiService.getFriends();
@@ -44,66 +41,52 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final friends = AppState.friends;
     final currentUser = AppState.currentUser;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('친구 목록'),
-      ),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-      body: RefreshIndicator(
-        onRefresh: _loadFriends,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  // ------------------------------------------------
-                  // 1. 내 프로필
-                  // ------------------------------------------------
-                  _buildMyProfile(currentUser),
+    return RefreshIndicator(
+      onRefresh: _loadFriends,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildMyProfile(currentUser),
+          const SizedBox(height: 20),
 
-                  const SizedBox(height: 20),
-
-                  // ------------------------------------------------
-                  // 2. 친구 목록 (접힘/펼침)
-                  // ------------------------------------------------
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _friendsExpanded = !_friendsExpanded;
-                      });
-                    },
-                    child: Row(
-                      children: [
-                        Text(
-                          '친구 ${friends.length}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          _friendsExpanded
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
-                        ),
-                      ],
-                    ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _friendsExpanded = !_friendsExpanded;
+              });
+            },
+            child: Row(
+              children: [
+                Text(
+                  '친구 ${friends.length}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+                const Spacer(),
+                Icon(
+                  _friendsExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                ),
+              ],
+            ),
+          ),
 
-                  const SizedBox(height: 10),
+          const SizedBox(height: 10),
 
-                  if (_friendsExpanded)
-                    ...friends.map((user) => _buildFriendTile(user)).toList(),
-                ],
-              ),
+          if (_friendsExpanded)
+            ...friends.map((user) => _buildFriendTile(user)).toList(),
+        ],
       ),
     );
   }
 
-  // ----------------------------------------------------
-  // 내 프로필
-  // ----------------------------------------------------
   Widget _buildMyProfile(User? user) {
     if (user == null) return const SizedBox();
 
@@ -125,15 +108,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  // ----------------------------------------------------
-  // 친구 리스트 타일
-  // ----------------------------------------------------
   Widget _buildFriendTile(User user) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         leading: const CircleAvatar(child: Icon(Icons.person)),
-
         title: Row(
           children: [
             Text(user.name),
@@ -142,8 +121,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ],
         ),
         subtitle: Text('${user.school} · ${user.region}'),
-
-        // 📌 프로필 열기
         onTap: () {
           Navigator.push(
             context,
@@ -152,8 +129,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
           );
         },
-
-        // 📌 채팅 이동
         trailing: OutlinedButton(
           onPressed: () {
             Navigator.push(

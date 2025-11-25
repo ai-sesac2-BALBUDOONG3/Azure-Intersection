@@ -17,63 +17,69 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final me = AppState.currentUser;
     final posts = AppState.communityPosts;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('커뮤니티'),
-      ),
+    if (me == null) {
+      return const Center(
+        child: Text('로그인이 필요해요.'),
+      );
+    }
 
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.black,
-        shape: const CircleBorder(),
-        onPressed: () async {
-          final result = await Navigator.pushNamed(context, '/write');
-          if (result == true) {
-            setState(() {});
-          }
-        },
-        child: const Icon(Icons.edit, color: Colors.white),
-      ),
-
-      body: me == null
-          ? const Center(child: Text('로그인이 필요해요.'))
-          : posts.isEmpty
-              ? const Center(
-                  child: Text(
-                    '아직 커뮤니티에 글이 없어요.\n글쓰기 버튼을 눌러 첫 글을 작성해보세요!',
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  itemCount: posts.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 24),
-                  itemBuilder: (context, index) {
-                    final post = posts[index];
-
-                    User? author;
-                    final knownUsers = [
-                      if (me != null) me,
-                      ...AppState.friends,
-                    ];
-
-                    // 🔥 타입 맞춰서 비교
-                    try {
-                      author = knownUsers.firstWhere(
-                        (u) => u.id.toString() == post.authorId,
-                      );
-                    } catch (_) {
-                      author = null;
-                    }
-
-                    return _ThreadPost(
-                      post: post,
-                      author: author,
-                    );
-                  },
+    return Stack(
+      children: [
+        posts.isEmpty
+            ? const Center(
+                child: Text(
+                  '아직 커뮤니티에 글이 없어요.\n글쓰기 버튼을 눌러 첫 글을 작성해보세요!',
+                  textAlign: TextAlign.center,
                 ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                itemCount: posts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 24),
+                itemBuilder: (context, index) {
+                  final post = posts[index];
+
+                  User? author;
+                  final knownUsers = [
+                    me,
+                    ...AppState.friends,
+                  ];
+
+                  try {
+                    author = knownUsers.firstWhere(
+                      (u) => u.id.toString() == post.authorId,
+                    );
+                  } catch (_) {
+                    author = null;
+                  }
+
+                  return _ThreadPost(
+                    post: post,
+                    author: author,
+                  );
+                },
+              ),
+
+        // 글쓰기 버튼
+        Positioned(
+          right: 20,
+          bottom: 20,
+          child: FloatingActionButton(
+            backgroundColor: Colors.black,
+            shape: const CircleBorder(),
+            onPressed: () async {
+              final result = await Navigator.pushNamed(context, '/write');
+              if (result == true) {
+                setState(() {});
+              }
+            },
+            child: const Icon(Icons.edit, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -148,8 +154,11 @@ class _ThreadPost extends StatelessWidget {
                   const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () {
-                      Navigator.pushNamed(context, '/comments',
-                          arguments: post);
+                      Navigator.pushNamed(
+                        context,
+                        '/comments',
+                        arguments: post,
+                      );
                     },
                     child: Row(
                       children: [

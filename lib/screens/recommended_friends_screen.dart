@@ -22,9 +22,6 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     _loadRecommended();
   }
 
-  // ---------------------------------------------
-  // 추천친구 불러오기
-  // ---------------------------------------------
   Future<void> _loadRecommended() async {
     try {
       final users = await ApiService.getRecommendedFriends();
@@ -39,23 +36,17 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     }
   }
 
-  // ---------------------------------------------
-  // 친구추가 로직
-  // ---------------------------------------------
   Future<void> _addFriend(User user) async {
     try {
       final success = await ApiService.addFriend(user.id);
 
       if (success) {
-        // (1) 추천목록에서 즉시 제거
         setState(() {
           _recommended.removeWhere((u) => u.id == user.id);
         });
 
-        // (2) 친구목록에도 추가
         AppState.friends.add(user);
 
-        // (3) 사용자 알림
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("${user.name}님이 친구로 추가되었습니다.")),
         );
@@ -76,62 +67,57 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   Widget build(BuildContext context) {
     final currentFriends = AppState.friends;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('추천친구'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  '당신과 지역·학교·나이가 유사한 친구들을 추천해요',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-                ..._recommended.map((user) {
-                  final isFriendAlready =
-                      currentFriends.any((f) => f.id == user.id);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          '당신과 지역·학교·나이가 유사한 친구들을 추천해요',
+          style: TextStyle(fontSize: 13, color: Colors.grey),
+        ),
+        const SizedBox(height: 16),
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 6),
-                    child: ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.person),
+        ..._recommended.map((user) {
+          final isFriendAlready =
+              currentFriends.any((f) => f.id == user.id);
+
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            child: ListTile(
+              leading: const CircleAvatar(
+                child: Icon(Icons.person),
+              ),
+              title: Text(user.name),
+              subtitle: Text("${user.school} · ${user.region}"),
+
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        FriendProfileScreen(user: user),
+                  ),
+                );
+              },
+
+              trailing: isFriendAlready
+                  ? const Icon(Icons.check_circle,
+                      color: Colors.green, size: 22)
+                  : FilledButton(
+                      onPressed: () => _addFriend(user),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18),
                       ),
-                      title: Text(user.name),
-                      subtitle: Text("${user.school} · ${user.region}"),
-
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => FriendProfileScreen(user: user),
-                          ),
-                        );
-                      },
-
-                      trailing: isFriendAlready
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: Colors.green,
-                              size: 22,
-                            )
-                          : FilledButton(
-                              onPressed: () => _addFriend(user),
-                              style: FilledButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 18),
-                              ),
-                              child: const Text('추가'),
-                            ),
+                      child: const Text('추가'),
                     ),
-                  );
-                }).toList(),
-              ],
             ),
+          );
+        }),
+      ],
     );
   }
 }

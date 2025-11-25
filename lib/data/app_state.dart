@@ -1,5 +1,8 @@
+// lib/data/app_state.dart
+
 import 'package:intersection/models/user.dart';
 import 'package:intersection/models/post.dart';
+import 'package:intersection/data/user_storage.dart';
 
 class AppState {
   /// 현재 로그인한 유저
@@ -8,7 +11,7 @@ class AppState {
   /// JWT 토큰
   static String? token;
 
-  /// 🔥 DB에서 불러온 친구 목록 (mutable)
+  /// 🔥 DB에서 불러온 친구 목록
   static List<User> friends = [];
 
   /// 🔥 커뮤니티 포스트 (추후 API로 대체)
@@ -31,7 +34,7 @@ class AppState {
   }
 
   /// ----------------------------------------------------
-  /// 로그인
+  /// 로그인 (토큰 + 유저정보 메모리에 저장)
   /// ----------------------------------------------------
   static void login(String newToken, User user) {
     token = newToken;
@@ -39,12 +42,15 @@ class AppState {
   }
 
   /// ----------------------------------------------------
-  /// 로그아웃
+  /// 🔥 로그아웃 (완전한 버전)
   /// ----------------------------------------------------
-  static void logout() {
+  static Future<void> logout() async {
     token = null;
     currentUser = null;
     friends = [];
     communityPosts = [];
+
+    // 🔥 SharedPreferences 초기화 → 자동로그인 제거
+    await UserStorage.clear();
   }
 }
