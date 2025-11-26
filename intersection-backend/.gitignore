@@ -8,6 +8,10 @@ instance/
 .pytest_cache/
 coverage.xml
 
+# Local .env file (contains secrets) - DO NOT commit
+.env
+.env.*
+
 # Environment variables (중요! 커밋하지 말 것)
 .env
 .env.local
