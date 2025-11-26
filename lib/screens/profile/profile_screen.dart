@@ -1,36 +1,53 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:intersection/models/user.dart';
-import 'package:intersection/screens/image_viewer.dart';
+import 'package:intersection/data/app_state.dart';
+import 'package:intersection/screens/profile/edit_profile_screen.dart';
+import 'package:intersection/screens/common/image_viewer.dart';
+import 'package:file_picker/file_picker.dart';
 
-class FriendProfileScreen extends StatelessWidget {
-  final User user;
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
 
-  const FriendProfileScreen({
-    super.key,
-    required this.user,
-  });
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Future<void> _pickBackgroundImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result == null) return;
+
+    final file = result.files.first;
+    setState(() {
+      AppState.currentUser!.backgroundImageUrl = file.path;
+    });
+  }
+
+  Future<void> _pickProfileImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result == null) return;
+
+    final file = result.files.first;
+    setState(() {
+      AppState.currentUser!.profileImageUrl = file.path;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final user = AppState.currentUser!;
     final width = MediaQuery.of(context).size.width;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(user.name),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: Icon(Icons.more_vert),
-          ),
-        ],
+        title: const Text("내 프로필"),
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ==========================
-            // 1) 배경 이미지
-            // ==========================
+            // =====================================================
+            // 🔥 1) 상단 - 배경 이미지 + 프로필 이미지 (새 기능)
+            // =====================================================
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -40,8 +57,7 @@ class FriendProfileScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ImageViewer(imageUrl: user.backgroundImageUrl!),
+                          builder: (_) => ImageViewer(imageUrl: user.backgroundImageUrl!),
                         ),
                       );
                     }
@@ -52,7 +68,11 @@ class FriendProfileScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       image: user.backgroundImageUrl != null
                           ? DecorationImage(
-                              image: _imageProvider(user.backgroundImageUrl!),
+                              image: user.backgroundImageUrl!.startsWith("http")
+                                  ? NetworkImage(user.backgroundImageUrl!)
+                                  : FileImage(
+                                      File(user.backgroundImageUrl!),
+                                    ) as ImageProvider,
                               fit: BoxFit.cover,
                             )
                           : null,
@@ -68,7 +88,7 @@ class FriendProfileScreen extends StatelessWidget {
                 ),
 
                 // ==========================
-                // 2) 프로필 이미지 중앙
+                // 프로필 이미지 중앙
                 // ==========================
                 Positioned(
                   bottom: -50,
@@ -79,18 +99,19 @@ class FriendProfileScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                ImageViewer(imageUrl: user.profileImageUrl!),
+                            builder: (_) => ImageViewer(imageUrl: user.profileImageUrl!),
                           ),
                         );
                       }
                     },
                     child: Hero(
-                      tag: "friend-profile-${user.id}",
+                      tag: "my-profile-${user.id}",
                       child: CircleAvatar(
                         radius: 50,
                         backgroundImage: user.profileImageUrl != null
-                            ? _imageProvider(user.profileImageUrl!)
+                            ? (user.profileImageUrl!.startsWith("http")
+                                ? NetworkImage(user.profileImageUrl!)
+                                : FileImage(File(user.profileImageUrl!)) as ImageProvider)
                             : null,
                         child: user.profileImageUrl == null
                             ? const Icon(Icons.person, size: 48)
@@ -191,8 +212,7 @@ class FriendProfileScreen extends StatelessWidget {
                   Text("지역: ${user.region}",
                       style: const TextStyle(fontSize: 16)),
                   const SizedBox(height: 10),
-                  Text("${user.birthYear}년생",
-                      style: const TextStyle(fontSize: 16)),
+                  Text("${user.birthYear}년생", style: const TextStyle(fontSize: 16)),
                   const SizedBox(height: 30),
                 ],
               ),

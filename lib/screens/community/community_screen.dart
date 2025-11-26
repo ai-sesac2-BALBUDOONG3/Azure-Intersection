@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intersection/data/app_state.dart';
+import 'package:intersection/services/api_service.dart';
 import 'package:intersection/models/post.dart';
 import 'package:intersection/models/user.dart';
 
@@ -81,6 +82,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ),
       ],
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // load posts from server
+    ApiService.listPosts().then((rows) {
+      final posts = rows.map((r) => Post.fromJson(r)).toList();
+      AppState.communityPosts = posts;
+      setState(() {});
+    }).catchError((e) {
+      // keep local state if request fails
+    });
   }
 }
 

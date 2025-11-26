@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intersection/data/app_state.dart';
 import 'package:intersection/models/post.dart';
+import 'package:intersection/services/api_service.dart';
 
 class CommunityWriteScreen extends StatefulWidget {
   const CommunityWriteScreen({super.key});
@@ -33,19 +34,16 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
 
     setState(() => _isPosting = true);
 
-    // 🔥 로컬 저장소에 게시물 추가
-    final newPost = Post(
-      id: DateTime.now().millisecondsSinceEpoch,
-      content: content,
-      authorId: me.id,
-      createdAt: DateTime.now(),
-    );
-
-    AppState.communityPosts.insert(0, newPost);
-
-    setState(() => _isPosting = false);
-
-    Navigator.pop(context, true); // 글 작성 완료 → 커뮤니티 화면으로 복귀
+    ApiService.createPost(content).then((data) {
+      // convert server response into Post model and add to AppState
+      final newPost = Post.fromJson(data);
+      AppState.communityPosts.insert(0, newPost);
+      setState(() => _isPosting = false);
+      Navigator.pop(context, true);
+    }).catchError((e) {
+      setState(() => _isPosting = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('게시글 작성 실패: $e')));
+    });
   }
 
   @override

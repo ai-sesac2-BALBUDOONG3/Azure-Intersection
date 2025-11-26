@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intersection/screens/recommended_friends_screen.dart';
-import 'package:intersection/screens/friends_screen.dart';
-import 'package:intersection/screens/community_screen.dart';
-import 'package:intersection/screens/profile_screen.dart';
-import 'package:intersection/screens/chat_list_screen.dart'; // 🔥 추가 필요
+import 'package:intersection/screens/friends/recommended_friends_screen.dart';
+import 'package:intersection/screens/friends/friends_screen.dart';
+import 'package:intersection/screens/community/community_screen.dart';
+import 'package:intersection/screens/profile/profile_screen.dart';
+import 'package:intersection/screens/chat/chat_list_screen.dart'; // 🔥 추가 필요
 
 class MainTabScreen extends StatefulWidget {
   final int initialIndex;

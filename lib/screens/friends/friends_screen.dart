@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intersection/data/app_state.dart';
 import 'package:intersection/models/user.dart';
-import 'package:intersection/screens/chat_screen.dart';
-import 'package:intersection/screens/friend_profile_screen.dart';
+import 'package:intersection/screens/chat/chat_screen.dart';
+import 'package:intersection/screens/friends/friend_profile_screen.dart';
 import 'package:intersection/services/api_service.dart';
 
 class FriendsScreen extends StatefulWidget {
@@ -23,6 +23,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _loadFriends() async {
+    // 로그인하지 않은 경우 API 호출하지 않음
+    if (AppState.token == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
     try {
       final friends = await ApiService.getFriends();
 

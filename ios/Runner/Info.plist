@@ -45,5 +45,20 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- URL scheme used by flutter_web_auth for OAuth redirects -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>intersection</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>intersection</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

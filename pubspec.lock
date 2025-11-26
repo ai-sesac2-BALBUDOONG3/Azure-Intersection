@@ -115,6 +115,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_web_auth:
+    dependency: "direct main"
+    description:
+      path: "local_plugins/flutter_web_auth"
+      relative: true
+    source: path
+    version: "0.4.3"
   flutter_web_plugins:
     dependency: transitive
     description: flutter

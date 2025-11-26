@@ -4,18 +4,18 @@ import 'package:intersection/data/signup_form_data.dart';
 import 'package:intersection/data/user_storage.dart';
 
 // Screens
-import 'package:intersection/screens/landing_screen.dart';
+import 'package:intersection/screens/auth/landing_screen.dart';
 import 'package:intersection/screens/main_tab_screen.dart';
-import 'package:intersection/screens/phone_verification_screen.dart';
-import 'package:intersection/screens/signup_step1_screen.dart';
-import 'package:intersection/screens/signup_step3_screen.dart';
-import 'package:intersection/screens/signup_step4_screen.dart';
-import 'package:intersection/screens/recommended_screen.dart';
-import 'package:intersection/screens/login_screen.dart';
-import 'package:intersection/screens/friends_screen.dart';
-import 'package:intersection/screens/comment_screen.dart';
-import 'package:intersection/screens/community_write_screen.dart';
-import 'package:intersection/screens/report_screen.dart';
+import 'package:intersection/screens/auth/phone_verification_screen.dart';
+import 'package:intersection/screens/signup/signup_step1_screen.dart';
+import 'package:intersection/screens/signup/signup_step3_screen.dart';
+import 'package:intersection/screens/signup/signup_step4_screen.dart';
+import 'package:intersection/screens/friends/recommended_screen.dart';
+import 'package:intersection/screens/auth/login_screen.dart';
+import 'package:intersection/screens/friends/friends_screen.dart';
+import 'package:intersection/screens/community/comment_screen.dart';
+import 'package:intersection/screens/community/community_write_screen.dart';
+import 'package:intersection/screens/common/report_screen.dart';
 
 import 'package:intersection/models/post.dart';
 

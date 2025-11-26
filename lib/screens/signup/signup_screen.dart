@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intersection/data/app_state.dart';
 import 'package:intersection/models/user.dart';
 import 'package:intersection/screens/main_tab_screen.dart';
+import 'package:intersection/services/api_service.dart';
+import 'package:intersection/data/user_storage.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -49,21 +51,50 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    final me = User(
-      id: 'me',
-      name: name,
-      birthYear: birthYear,
-      region: region,
-      school: school,
-    );
+    final payload = {
+      'name': name,
+      'birth_year': birthYear,
+      'region': region,
+      'school_name': school,
+    };
 
-    AppState.currentUser = me;
-    AppState.allUsers.add(me);
+    // If we have an auth token, update the server-side profile. Otherwise
+    // fall back to local-only behavior for quick demo/testing.
+    if (AppState.token != null) {
+      ApiService.updateMyInfo(payload).then((resp) async {
+        // resp contains updated user info — map to User and store
+        final user = User.fromJson(resp);
+        AppState.currentUser = user;
+        // optional: save to local storage
+        await UserStorage.save(user);
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainTabScreen()),
-      (route) => false,
-    );
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainTabScreen()),
+          (route) => false,
+        );
+      }).catchError((e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('프로필 업데이트 실패: $e')),
+        );
+      });
+    } else {
+      final me = User(
+        id: AppState.allUsers.length + 1,
+        name: name,
+        birthYear: birthYear,
+        region: region,
+        school: school,
+      );
+
+      AppState.currentUser = me;
+      AppState.allUsers.add(me);
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainTabScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override

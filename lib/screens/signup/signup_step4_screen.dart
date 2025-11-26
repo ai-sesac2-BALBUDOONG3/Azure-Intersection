@@ -1,10 +1,9 @@
-// signup_step4_screen.dart
 import 'package:flutter/material.dart';
-import '../data/signup_form_data.dart';
-import '../services/api_service.dart';
-import '../models/user.dart';
-import '../data/app_state.dart';
-import '../data/user_storage.dart';
+import 'package:intersection/data/signup_form_data.dart';
+import 'package:intersection/services/api_service.dart';
+import 'package:intersection/models/user.dart';
+import 'package:intersection/data/app_state.dart';
+import 'package:intersection/data/user_storage.dart';
 import 'package:intersection/screens/main_tab_screen.dart';
 
 class SignupStep4Screen extends StatefulWidget {
@@ -101,6 +100,9 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
 
     // payload 생성
     final payload = {
+      // backend expects `login_id` in the UserCreate schema — include both
+      // fields so older code paths that use `email` continue to work.
+      'login_id': form.loginId,
       'email': form.loginId,
       'password': form.password,
       'name': form.name,
@@ -117,20 +119,17 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
 
       if (!mounted) return;
 
-      // 🔥 자동 로그인 처리
-      final newUser = User(
-        id: 0, // 실제 서버 ID는 API 응답 기반으로 수정 예정
-        name: form.name,
-        birthYear: birthYear,
-        region: form.baseRegion,
-        school: schoolNameController.text,
-      );
-
-      // 메모리 저장
-      AppState.currentUser = newUser;
-
-      // 로컬 저장 (웹이면 shared_preferences_web 사용됨)
-      await UserStorage.save(newUser);
+      // 🔥 자동 로그인 처리 - 회원가입 후 바로 로그인
+      try {
+        final token = await ApiService.login(form.loginId, form.password);
+        AppState.token = token;
+        
+        final user = await ApiService.getMyInfo();
+        await AppState.login(token, user);
+      } catch (e) {
+        debugPrint("자동 로그인 실패: $e");
+        // 자동 로그인 실패해도 회원가입은 성공했으므로 계속 진행
+      }
 
       showDialog(
         context: context,

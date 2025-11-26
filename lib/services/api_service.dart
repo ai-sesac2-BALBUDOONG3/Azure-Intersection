@@ -68,14 +68,44 @@ class ApiService {
       final data = jsonDecode(response.body);
       return User(
         id: data["id"],
-        name: data["name"],
-        birthYear: data["birth_year"],
-        region: data["region"],
-        school: data["school_name"],
+        name: data["name"] ?? "",           // null이면 빈 문자열
+        birthYear: data["birth_year"] ?? 0, // null이면 0
+        region: data["region"] ?? "",       // null이면 빈 문자열
+        school: data["school_name"] ?? "",  // null이면 빈 문자열
       );
     } else {
       throw Exception("내 정보 불러오기 실패: ${response.body}");
     }
+  }
+
+  // ----------------------------------------------------
+  // 7) Update my info (authenticated)
+  // ----------------------------------------------------
+  static Future<Map<String, dynamic>> updateMyInfo(Map<String, dynamic> data) async {
+    final url = Uri.parse('${ApiConfig.baseUrl}/users/me');
+
+    final response = await http.put(url, headers: _headers(), body: jsonEncode(data));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('내 정보 업데이트 실패: ${response.body}');
+  }
+
+  // ----------------------------------------------------
+  // Kakao dev login (dev-only helper)
+  // ----------------------------------------------------
+  static Future<String> kakaoDevLogin() async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/auth/kakao/dev_token");
+
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data["access_token"];
+    }
+
+    throw Exception("Kakao dev login failed: ${response.body}");
   }
 
   // ----------------------------------------------------
@@ -118,6 +148,55 @@ class ApiService {
     );
 
     return response.statusCode == 200;
+  }
+
+  // ----------------------------------------------------
+  // Posts / Comments
+  // ----------------------------------------------------
+  static Future<Map<String, dynamic>> createPost(String content) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me/posts/");
+    final response = await http.post(url, headers: _headers(), body: jsonEncode({"content": content}));
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception("게시글 작성 실패: ${response.body}");
+  }
+
+  static Future<List<Map<String, dynamic>>> listPosts() async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/");
+    final response = await http.get(url, headers: _headers(json: false));
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return List<Map<String, dynamic>>.from(list);
+    }
+
+    throw Exception("게시물 목록 불러오기 실패: ${response.body}");
+  }
+
+  static Future<Map<String, dynamic>> createComment(int postId, String content) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/comments");
+    final response = await http.post(url, headers: _headers(), body: jsonEncode({"content": content}));
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception("댓글 작성 실패: ${response.body}");
+  }
+
+  static Future<List<Map<String, dynamic>>> listComments(int postId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/comments");
+    final response = await http.get(url, headers: _headers(json: false));
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return List<Map<String, dynamic>>.from(list);
+    }
+
+    throw Exception("댓글 목록 불러오기 실패: ${response.body}");
   }
 
   // ----------------------------------------------------

@@ -42,9 +42,6 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // --------------------------------------------
-  // 메시지 전송 (텍스트)
-  // --------------------------------------------
   void _sendMessage() {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -55,9 +52,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // --------------------------------------------
-  // 파일 선택 처리 (file_picker)
-  // --------------------------------------------
   Future<void> _pickFile(FileType type) async {
     final result = await FilePicker.platform.pickFiles(type: type);
     if (result == null) return;
@@ -74,9 +68,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // --------------------------------------------
-  // 이모지 선택 바텀시트
-  // --------------------------------------------
   void _openEmojiPicker() {
     final emojis = [
       '😀', '😄', '😊', '😉', '😍', '😎', '😭', '😂', '😡', '👍',
@@ -150,9 +141,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // --------------------------------------------
-  // 사진/파일 첨부 바텀시트 (file_picker 연동)
-  // --------------------------------------------
   void _openAttachmentSheet() {
     showModalBottomSheet(
       context: context,
@@ -198,9 +186,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // --------------------------------------------
-  // UI
-  // --------------------------------------------
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -214,7 +199,6 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // 메시지 영역
           Expanded(
             child: _messages.isEmpty
                 ? const Center(
@@ -266,29 +250,23 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
           ),
 
-          // --------------------------------------------
-          // 입력바
-          // --------------------------------------------
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
               child: Row(
                 children: [
-                  // 😀 이모지 버튼
                   IconButton(
                     onPressed: _openEmojiPicker,
                     icon: const Icon(Icons.emoji_emotions_outlined),
                     tooltip: '이모지',
                   ),
 
-                  // 📎 첨부 버튼
                   IconButton(
                     onPressed: _openAttachmentSheet,
                     icon: const Icon(Icons.attach_file),
                     tooltip: '사진/파일',
                   ),
 
-                  // 입력창
                   Expanded(
                     child: TextField(
                       controller: _messageController,
@@ -319,7 +297,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
                   const SizedBox(width: 8),
 
-                  // 전송 버튼
                   Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.primary,

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/signup_form_data.dart';
+import 'package:intersection/data/signup_form_data.dart';
 
 class SignupStep1Screen extends StatefulWidget {
   final SignupFormData? initialData;
@@ -41,7 +41,7 @@ class _SignupStep1ScreenState extends State<SignupStep1Screen> {
 
   bool _isValidEmail(String email) {
     final emailRegex =
-        RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+        RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\$');
     return emailRegex.hasMatch(email);
   }
 

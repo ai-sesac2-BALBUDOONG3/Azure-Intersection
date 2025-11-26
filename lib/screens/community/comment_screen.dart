@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intersection/models/post.dart';
+import 'package:intersection/services/api_service.dart';
+import 'package:intersection/data/app_state.dart';
 
 class CommentScreen extends StatefulWidget {
   final Post post;
@@ -15,6 +17,35 @@ class _CommentScreenState extends State<CommentScreen> {
 
   /// 실제 댓글 데이터가 들어오면 여기에 맵핑
   List<Map<String, dynamic>> comments = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // load comments from server
+    ApiService.listComments(widget.post.id).then((rows) {
+      setState(() {
+        comments = rows.map((r) {
+          final userId = r['user_id'];
+          String name = '익명';
+          try {
+            if (AppState.currentUser != null && AppState.currentUser!.id == userId) name = AppState.currentUser!.name ?? '나';
+            else {
+              final u = AppState.friends.firstWhere((f) => f.id == userId, orElse: () => AppState.friends.isNotEmpty ? AppState.friends.first : AppState.currentUser!);
+              name = u.name ?? '익명';
+            }
+          } catch (_) {}
+
+          return {
+            'name': name,
+            'content': r['content'] ?? '',
+            'date': r['created_at'] ?? '',
+          };
+        }).toList();
+      });
+    }).catchError((_) {
+      // ignore errors for now
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -112,19 +143,24 @@ class _CommentScreenState extends State<CommentScreen> {
 
                 IconButton(
                   icon: const Icon(Icons.send, color: Colors.black87),
-                  onPressed: () {
+                    onPressed: () async {
                     final text = _controller.text.trim();
                     if (text.isEmpty) return;
 
-                    setState(() {
-                      comments.add({
-                        "name": "나",
-                        "content": text,
-                        "date": "방금 전",
+                    try {
+                      final resp = await ApiService.createComment(widget.post.id, text);
+                      // optimistic UI: append comment
+                      setState(() {
+                        comments.add({
+                          'name': AppState.currentUser?.name ?? '나',
+                          'content': resp['content'] ?? text,
+                          'date': resp['created_at'] ?? '방금 전',
+                        });
                       });
-                    });
-
-                    _controller.clear();
+                      _controller.clear();
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('댓글 작성 실패: $e')));
+                    }
                   },
                 ),
               ],

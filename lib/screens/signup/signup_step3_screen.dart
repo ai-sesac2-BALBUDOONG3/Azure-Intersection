@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../data/signup_form_data.dart';
+import 'package:intersection/data/signup_form_data.dart';
 
 class SignupStep3Screen extends StatefulWidget {
   final SignupFormData data;
