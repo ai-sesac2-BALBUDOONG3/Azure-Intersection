@@ -1,0 +1,10 @@
+fastapi>=0.95
+uvicorn[standard]>=0.21
+sqlmodel>=0.0.8
+python-jose>=3.3.0
+passlib[bcrypt]>=1.7
+httpx>=0.24
+python-dotenv>=1.0
+psycopg[binary]>=3.2
+pydantic-settings>=2.0
+argon2-cffi>=21.3.0

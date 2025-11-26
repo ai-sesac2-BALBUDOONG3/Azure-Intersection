@@ -1,0 +1,26 @@
+__pycache__/
+.venv/
+venv/
+env/
+*.pyc
+instance/
+*.sqlite3
+.pytest_cache/
+coverage.xml
+
+# Environment variables (중요! 커밋하지 말 것)
+.env
+.env.local
+.env.*.local
+# .env.example은 커밋 가능!
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

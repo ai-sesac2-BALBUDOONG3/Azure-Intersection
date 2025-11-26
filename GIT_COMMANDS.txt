@@ -1,0 +1,165 @@
+# Git 저장소 초기화 및 커밋 명령어
+
+## 1단계: Git 초기화
+
+```bash
+cd C:\dev\intersection-integration
+git init
+```
+
+## 2단계: 원격 저장소 추가 (GitHub에 저장소를 먼저 생성하세요)
+
+```bash
+git remote add origin <your-github-repository-url>
+```
+
+예시:
+```bash
+git remote add origin https://github.com/yourusername/intersection-integration.git
+```
+
+## 3단계: 파일 추가
+
+```bash
+# 모든 파일 추가
+git add .
+
+# 또는 특정 파일만 추가
+git add README.md
+git add .gitignore
+git add intersection-backend/
+git add intersection-frontend/
+```
+
+## 4단계: 커밋
+
+```bash
+git commit -F COMMIT_MESSAGE.txt
+```
+
+또는 직접 메시지 입력:
+
+```bash
+git commit -m "feat: Intersection 프로젝트 초기 구현 완료"
+```
+
+## 5단계: GitHub에 푸시
+
+```bash
+# 첫 푸시 (main 브랜치로)
+git branch -M main
+git push -u origin main
+```
+
+---
+
+## ⚠️ 커밋 전 체크리스트
+
+반드시 확인하세요:
+
+- [ ] `.env` 파일이 gitignore에 포함되어 있는지 확인
+- [ ] `.env` 파일이 git add 되지 않았는지 확인:
+      ```bash
+      git status
+      # ".env"가 리스트에 없어야 함!
+      ```
+- [ ] 개인 정보나 비밀 키가 코드에 포함되지 않았는지 확인
+- [ ] 백엔드 `.venv/` 폴더가 제외되었는지 확인
+- [ ] 프론트엔드 `build/` 폴더가 제외되었는지 확인
+
+---
+
+## 📋 커밋될 주요 파일 목록
+
+### 루트
+- README.md (새로 작성됨)
+- .gitignore (새로 추가됨)
+- INSTALLATION_GUIDE.md (새로 작성됨)
+- COMMIT_MESSAGE.txt (참고용)
+- GIT_COMMANDS.txt (참고용)
+
+### 백엔드
+- intersection-backend/app/ (전체 소스 코드)
+- intersection-backend/requirements.txt
+- intersection-backend/README.md (업데이트됨)
+- intersection-backend/.gitignore (업데이트됨 - .env 추가)
+- intersection-backend/.env.example (새로 추가됨)
+
+### 프론트엔드
+- intersection-frontend/lib/ (전체 소스 코드)
+- intersection-frontend/pubspec.yaml
+- intersection-frontend/README.md (업데이트됨)
+- intersection-frontend/android/
+- intersection-frontend/ios/
+- intersection-frontend/web/
+
+---
+
+## 🚫 커밋되지 않아야 할 파일
+
+gitignore로 자동 제외됨:
+
+- `intersection-backend/.env` ⚠️ 중요!
+- `intersection-backend/.venv/`
+- `intersection-backend/__pycache__/`
+- `intersection-frontend/build/`
+- `intersection-frontend/.dart_tool/`
+- `.vscode/`
+- `.idea/`
+- `.DS_Store`
+
+---
+
+## 🔍 커밋 전 확인 명령어
+
+```bash
+# Git 상태 확인
+git status
+
+# .env 파일이 리스트에 있다면 제거:
+git reset HEAD intersection-backend/.env
+
+# 변경된 파일 목록 확인
+git diff --name-only
+
+# 커밋할 파일 목록 확인
+git diff --cached --name-only
+```
+
+---
+
+## 💡 유용한 Git 명령어
+
+```bash
+# 특정 파일 제거 (이미 add한 경우)
+git reset HEAD <file>
+
+# 모든 add 취소
+git reset HEAD
+
+# 커밋 메시지 수정 (push 전)
+git commit --amend
+
+# 마지막 커밋 취소 (변경사항은 유지)
+git reset --soft HEAD~1
+
+# Git 사용자 정보 설정 (처음 사용 시)
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+---
+
+## 📝 커밋 후 README 업데이트
+
+GitHub 저장소 URL을 프로젝트 README에 추가하세요:
+
+```markdown
+## 설치
+
+\`\`\`bash
+git clone https://github.com/yourusername/intersection-integration.git
+cd intersection-integration
+\`\`\`
+```
+

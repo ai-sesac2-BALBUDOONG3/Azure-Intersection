@@ -1,0 +1,98 @@
+feat: Intersection 프로젝트 초기 구현 완료
+
+🎉 학창 시절 친구들과 재연결하는 소셜 네트워크 플랫폼
+
+## 주요 기능
+
+### 백엔드 (FastAPI)
+- JWT 기반 사용자 인증 (회원가입/로그인)
+- Kakao OAuth 통합 (실제 + 개발용 모의 로그인)
+- PostgreSQL 데이터베이스 연동
+- RESTful API 설계
+  - 사용자 관리 (/users, /token)
+  - 친구 추천 및 관리 (/friends)
+  - 커뮤니티 게시판 (/posts, /comments)
+- CORS 설정 (로컬 개발 환경 지원)
+- 자동 API 문서 생성 (Swagger UI, ReDoc)
+
+### 프론트엔드 (Flutter)
+- 멀티 플랫폼 지원 (Web, Android, iOS)
+- 사용자 인증 플로우
+  - 일반 로그인/회원가입
+  - Kakao OAuth 로그인
+  - 개발용 간편 로그인
+- 단계별 회원가입 프로세스
+  - 폰 인증
+  - 기본 정보 (이름, 생년, 성별)
+  - 지역 선택
+  - 학교 정보 (학교명, 학교급, 입학년도)
+- 친구 추천 시스템 (지역/학교 기준)
+- 커뮤니티 게시판 (게시물/댓글)
+- 실시간 친구 목록
+- 채팅 UI 준비
+- 자동 로그인 (토큰 로컬 저장)
+- 플랫폼별 API URL 자동 설정
+
+## 기술 스택
+
+**백엔드**
+- Python 3.12
+- FastAPI
+- SQLModel + PostgreSQL
+- JWT (python-jose)
+- OAuth2 (Kakao)
+- Pydantic
+
+**프론트엔드**
+- Flutter 3.10+
+- Dart 3.0+
+- HTTP 패키지
+- flutter_web_auth
+- shared_preferences
+
+## 프로젝트 구조
+
+```
+intersection-integration/
+├── intersection-backend/    # FastAPI 백엔드
+│   ├── app/
+│   │   ├── routers/        # API 라우터
+│   │   ├── models.py       # 데이터 모델
+│   │   ├── schemas.py      # Pydantic 스키마
+│   │   └── ...
+│   ├── .env.example        # 환경 변수 예시
+│   └── requirements.txt
+└── intersection-frontend/   # Flutter 프론트엔드
+    ├── lib/
+    │   ├── screens/        # UI 화면 (폴더별 정리)
+    │   ├── services/       # API 서비스
+    │   ├── models/         # 데이터 모델
+    │   └── ...
+    └── pubspec.yaml
+```
+
+## 보안 설정
+
+- `.env` 파일 gitignore 추가
+- JWT 시크릿 환경 변수화
+- Kakao OAuth 키 보호
+- CORS 로컬 개발 환경으로 제한
+
+## 개발 환경
+
+- 웹 브라우저 테스트 지원 (Chrome)
+- Android 에뮬레이터 지원
+- Hot reload 개발 환경
+- 자동 데이터베이스 마이그레이션
+
+## 문서화
+
+- README.md 작성 (루트, 백엔드, 프론트엔드)
+- API 자동 문서 생성
+- 환경 변수 예시 파일
+- Kakao OAuth 설정 가이드
+
+---
+
+Closes #N/A
+
