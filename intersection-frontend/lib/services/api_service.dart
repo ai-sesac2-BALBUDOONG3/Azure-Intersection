@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/user.dart';
+import '../models/chat_room.dart';
+import '../models/chat_message.dart';
 import '../data/app_state.dart';
 
 class ApiService {
@@ -224,6 +226,78 @@ class ApiService {
       }).toList();
     } else {
       throw Exception("친구 목록 불러오기 실패: ${response.body}");
+    }
+  }
+
+  // ----------------------------------------------------
+  // 💬 채팅 API
+  // ----------------------------------------------------
+  
+  /// 채팅방 생성 또는 가져오기
+  static Future<ChatRoom> createOrGetChatRoom(int friendId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms");
+
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({"friend_id": friendId}),
+    );
+
+    if (response.statusCode == 200) {
+      return ChatRoom.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception("채팅방 생성 실패: ${response.body}");
+    }
+  }
+
+  /// 내 채팅방 목록 가져오기
+  static Future<List<ChatRoom>> getMyChatRooms() async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.map((json) => ChatRoom.fromJson(json)).toList();
+    } else {
+      throw Exception("채팅방 목록 불러오기 실패: ${response.body}");
+    }
+  }
+
+  /// 채팅방의 메시지 목록 가져오기
+  static Future<List<ChatMessage>> getChatMessages(int roomId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.map((json) => ChatMessage.fromJson(json)).toList();
+    } else {
+      throw Exception("메시지 불러오기 실패: ${response.body}");
+    }
+  }
+
+  /// 메시지 전송 (REST API 방식)
+  static Future<ChatMessage> sendChatMessage(int roomId, String content) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages");
+
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({"content": content}),
+    );
+
+    if (response.statusCode == 200) {
+      return ChatMessage.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception("메시지 전송 실패: ${response.body}");
     }
   }
 }
