@@ -319,52 +319,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showLogoutConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible: false, // 바깥 영역 클릭해도 닫히지 않음
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text(
-            '로그아웃',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          content: const Text(
-            '정말 로그아웃 하시겠습니까?\n\n로그아웃 시 다음 데이터가 삭제됩니다:\n'
-            '• 로그인 토큰 (JWT)\n'
-            '• 사용자 정보\n'
-            '• 친구 목록 캐시\n'
-            '• 자동 로그인 정보',
+          contentPadding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 아이콘
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.logout_rounded,
+                  size: 48,
+                  color: Colors.red.shade400,
+                ),
+              ),
+              const SizedBox(height: 24),
+              // 메시지
+              const Text(
+                '정말 로그아웃 하시겠습니까?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text(
-                '취소',
-                style: TextStyle(color: Colors.grey),
+            // 취소 버튼
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade300, width: 1),
+                  ),
+                ),
+                child: const Text(
+                  '취소',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black54,
+                  ),
+                ),
               ),
             ),
-            TextButton(
-              onPressed: () async {
-                // 1. 다이얼로그 닫기
-                Navigator.of(dialogContext).pop();
+            const SizedBox(width: 12),
+            // 로그아웃 버튼
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () async {
+                  // 1. 다이얼로그 닫기
+                  Navigator.of(dialogContext).pop();
 
-                // 2. 로그아웃 실행 (메모리 + 로컬 저장소 초기화)
-                await AppState.logout();
+                  // 2. 로그아웃 실행 (메모리 + 로컬 저장소 초기화)
+                  await AppState.logout();
 
-                // 3. 로그인 화면으로 이동
-                if (!context.mounted) return;
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LandingScreen()),
-                  (route) => false,
-                );
-              },
-              child: const Text(
-                '로그아웃',
-                style: TextStyle(
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.bold,
+                  // 3. 로그인 화면으로 이동
+                  if (!context.mounted) return;
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LandingScreen()),
+                    (route) => false,
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  '로그아웃',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
           ],
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         );
       },
     );
