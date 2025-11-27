@@ -60,7 +60,7 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-   
+    
     // 2. 에러 발생
     if (_errorMessage != null) {
       return Center(child: Text("오류: $_errorMessage"));
@@ -113,7 +113,7 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
             child: const Icon(Icons.person, color: Colors.grey),
           ),
           const SizedBox(width: 16),
-         
+          
           // 이름 및 정보
           Expanded(
             child: Column(
@@ -143,7 +143,7 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
             onPressed: () async {
               // 1. API 호출
               bool success = await ApiService.addFriend(user.id);
-             
+              
               if (success) {
                 // 2. 성공 시, 화면 목록에서 즉시 제거 (UX 향상) 🔥
                 setState(() {
