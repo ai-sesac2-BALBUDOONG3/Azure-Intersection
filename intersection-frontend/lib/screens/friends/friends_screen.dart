@@ -136,17 +136,63 @@ class _FriendsScreenState extends State<FriendsScreen> {
           );
         },
         trailing: OutlinedButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(friend: user),
-              ),
-            );
-          },
-          child: const Text('채팅'),
+          onPressed: () => _startChat(user),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            side: const BorderSide(color: Colors.blue),
+          ),
+          child: const Text(
+            '채팅',
+            style: TextStyle(
+              color: Colors.blue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  /// 채팅 시작하기
+  Future<void> _startChat(User friend) async {
+    // 로딩 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // 채팅방 생성 또는 가져오기
+      final chatRoom = await ApiService.createOrGetChatRoom(friend.id);
+
+      if (!mounted) return;
+
+      // 로딩 닫기
+      Navigator.pop(context);
+
+      // 채팅 화면으로 이동
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            roomId: chatRoom.id,
+            friendId: friend.id,
+            friendName: friend.name,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // 로딩 닫기
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("채팅방 생성 실패: $e")),
+      );
+    }
   }
 }
