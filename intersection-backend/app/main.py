@@ -11,6 +11,7 @@ from .routers import posts as posts_router
 from .routers import comments as comments_router
 from .routers import friends as friends_router
 from .routers import common as common_router  # 👈 새로 추가된 파일 업로드 라우터
+from .routers import chat as chat_router  # 💬 채팅 라우터
 
 app = FastAPI(title="Intersection Backend (dev)")
 
@@ -45,6 +46,7 @@ app.include_router(posts_router.router)
 app.include_router(comments_router.router)
 app.include_router(friends_router.router)
 app.include_router(common_router.router)  # 👈 파일 업로드 기능 등록
+app.include_router(chat_router.router)  # 💬 채팅 기능 등록
 
 
 @app.get("/")

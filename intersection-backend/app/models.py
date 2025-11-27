@@ -77,3 +77,25 @@ class UserFriendship(SQLModel, table=True):
     friend_user_id: int = Field(foreign_key="user.id")
     status: Optional[str] = "accepted"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ------------------------------------------------------
+# 💬 Chat (채팅) 모델
+# ------------------------------------------------------
+class ChatRoom(SQLModel, table=True):
+    """1:1 채팅방 모델"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user1_id: int = Field(foreign_key="user.id")  # 채팅방 생성자
+    user2_id: int = Field(foreign_key="user.id")  # 채팅 상대방
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)  # 마지막 메시지 시간
+
+
+class ChatMessage(SQLModel, table=True):
+    """채팅 메시지 모델"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    room_id: int = Field(foreign_key="chatroom.id")
+    sender_id: int = Field(foreign_key="user.id")
+    content: str  # 메시지 내용
+    is_read: bool = Field(default=False)  # 읽음 여부
+    created_at: datetime = Field(default_factory=datetime.utcnow)
