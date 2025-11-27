@@ -374,7 +374,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     verticalSpacing: 0,
                     horizontalSpacing: 0,
                     gridPadding: EdgeInsets.zero,
-                    initCategory: Category.RECENT,
                     bgColor: const Color(0xFFF2F2F2),
                     columns: 7,
                     replaceEmojiOnLimitExceed: false,
