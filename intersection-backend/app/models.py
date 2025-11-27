@@ -39,17 +39,28 @@ class User(SQLModel, table=True):
     school_type: Optional[str] = None
     admission_year: Optional[int] = None # 입학년도
 
+    # 📷 [추가됨] 프로필 이미지 & 배경 이미지 URL
+    profile_image: Optional[str] = None      
+    background_image: Optional[str] = None
+
     # 🔥 새로 추가된 부분: 커뮤니티 ID와 관계 설정
     community_id: Optional[int] = Field(default=None, foreign_key="community.id")
     community: Optional[Community] = Relationship(back_populates="users")
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
+
+
 # (나머지 Post, Comment 등 기존 코드는 그대로 두시면 됩니다)
 class Post(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     author_id: int = Field(foreign_key="user.id")
     content: str
+
+# 📷 [추가됨] 게시글 이미지 URL (여러 장이면 쉼표로 구분하거나 별도 테이블 필요하지만, 일단 1장으로 시작)
+    image_url: Optional[str] = None
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
