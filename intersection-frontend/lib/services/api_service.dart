@@ -397,4 +397,31 @@ class ApiService {
 
     return response.statusCode == 200;
   }
+
+  /// 내가 특정 사용자를 신고했는지 확인
+  static Future<Map<String, dynamic>> checkMyReport(int userId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/my-reports/$userId");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return {"has_reported": false};
+  }
+
+  /// 신고 취소
+  static Future<bool> cancelReport(int reportId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/report/$reportId");
+
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
+
+    return response.statusCode == 200;
+  }
 }

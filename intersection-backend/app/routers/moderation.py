@@ -86,7 +86,62 @@ def unblock_user(
         session.delete(block)
         session.commit()
         
-        return {"message": "User unblocked successfully"}
+        return {"message": "User unblocked successfully", "success": True}
+
+
+@router.delete("/report/{report_id}")
+def cancel_report(
+    report_id: int,
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """신고 취소 (검토 전까지만 가능)"""
+    with Session(engine) as session:
+        statement = select(UserReport).where(
+            UserReport.id == report_id,
+            UserReport.reporter_id == current_user_id
+        )
+        report = session.exec(statement).first()
+        
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        # 이미 검토 중이거나 완료된 신고는 취소 불가
+        if report.status != "pending":
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot cancel report that is already being reviewed"
+            )
+        
+        session.delete(report)
+        session.commit()
+        
+        return {"message": "Report canceled successfully", "success": True}
+
+
+@router.get("/my-reports/{reported_user_id}")
+def check_my_report(
+    reported_user_id: int,
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """특정 사용자에 대한 내 신고 확인"""
+    with Session(engine) as session:
+        statement = select(UserReport).where(
+            UserReport.reporter_id == current_user_id,
+            UserReport.reported_user_id == reported_user_id,
+            UserReport.status == "pending"
+        ).order_by(UserReport.created_at.desc())
+        
+        report = session.exec(statement).first()
+        
+        if report:
+            return {
+                "has_reported": True,
+                "report_id": report.id,
+                "reason": report.reason,
+                "status": report.status
+            }
+        
+        return {"has_reported": False}
 
 
 @router.get("/blocked", response_model=List[UserBlockRead])

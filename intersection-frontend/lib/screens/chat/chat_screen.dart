@@ -3,6 +3,8 @@ import '../../models/chat_message.dart';
 import '../../services/api_service.dart';
 import '../../data/app_state.dart';
 import 'dart:async';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:file_picker/file_picker.dart';
 
 class ChatScreen extends StatefulWidget {
   final int roomId;
@@ -29,12 +31,15 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isBlocked = false;
   bool _iBlockedThem = false;
   bool _theyBlockedMe = false;
+  bool _iReportedThem = false;
+  bool _showEmojiPicker = false;
   Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _checkBlockStatus();
+    _checkReportStatus();
     _loadMessages();
     // 3초마다 새 메시지 확인 (실시간처럼 동작)
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
@@ -62,6 +67,22 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       debugPrint("차단 상태 확인 오류: $e");
+    }
+  }
+
+  int? _reportId;
+
+  Future<void> _checkReportStatus() async {
+    try {
+      final result = await ApiService.checkMyReport(widget.friendId);
+      if (mounted) {
+        setState(() {
+          _iReportedThem = result['has_reported'] ?? false;
+          _reportId = result['report_id'];
+        });
+      }
+    } catch (e) {
+      debugPrint("신고 상태 확인 오류: $e");
     }
   }
 
@@ -196,15 +217,19 @@ class _ChatScreenState extends State<ChatScreen> {
             onSelected: (value) {
               if (value == 'block') {
                 _showBlockDialog();
+              } else if (value == 'unblock') {
+                _showUnblockDialog();
               } else if (value == 'report') {
                 _showReportDialog();
+              } else if (value == 'unreport') {
+                _showUnreportDialog();
               } else if (value == 'leave') {
                 _showLeaveChatDialog();
               }
             },
             itemBuilder: (context) => [
-              // 차단당하지 않았을 때만 차단/신고 버튼 표시
-              if (!_theyBlockedMe) ...[
+              // 차단하지 않았고 차단당하지 않았을 때만 차단 버튼 표시
+              if (!_theyBlockedMe && !_iBlockedThem && !_iReportedThem)
                 const PopupMenuItem(
                   value: 'block',
                   child: Row(
@@ -215,6 +240,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     ],
                   ),
                 ),
+              // 차단했을 때 차단 해제 버튼 표시
+              if (_iBlockedThem)
+                const PopupMenuItem(
+                  value: 'unblock',
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, size: 20, color: Colors.green),
+                      SizedBox(width: 12),
+                      Text('차단 해제'),
+                    ],
+                  ),
+                ),
+              // 신고하지 않았고 차단당하지 않았을 때만 신고 버튼 표시
+              if (!_theyBlockedMe && !_iReportedThem && !_iBlockedThem)
                 const PopupMenuItem(
                   value: 'report',
                   child: Row(
@@ -225,7 +264,19 @@ class _ChatScreenState extends State<ChatScreen> {
                     ],
                   ),
                 ),
-              ],
+              // 신고했을 때 신고 해제 버튼 표시 (관리자 검토 전까지만)
+              if (_iReportedThem)
+                const PopupMenuItem(
+                  value: 'unreport',
+                  child: Row(
+                    children: [
+                      Icon(Icons.undo, size: 20, color: Colors.blue),
+                      SizedBox(width: 12),
+                      Text('신고 취소'),
+                    ],
+                  ),
+                ),
+              // 채팅방 나가기는 항상 표시
               const PopupMenuItem(
                 value: 'leave',
                 child: Row(
@@ -305,6 +356,37 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
           ),
 
+          // 이모지 피커
+          if (_showEmojiPicker)
+            SizedBox(
+              height: 250,
+              child: EmojiPicker(
+                onEmojiSelected: (category, emoji) {
+                  setState(() {
+                    _messageController.text += emoji.emoji;
+                  });
+                },
+                config: Config(
+                  height: 256,
+                  checkPlatformCompatibility: true,
+                  emojiViewConfig: EmojiViewConfig(
+                    emojiSizeMax: 28,
+                    verticalSpacing: 0,
+                    horizontalSpacing: 0,
+                    gridPadding: EdgeInsets.zero,
+                    initCategory: Category.RECENT,
+                    bgColor: const Color(0xFFF2F2F2),
+                    columns: 7,
+                    replaceEmojiOnLimitExceed: false,
+                  ),
+                  skinToneConfig: const SkinToneConfig(),
+                  categoryViewConfig: const CategoryViewConfig(),
+                  bottomActionBarConfig: const BottomActionBarConfig(),
+                  searchViewConfig: const SearchViewConfig(),
+                ),
+              ),
+            ),
+
           // 메시지 입력 영역
           Container(
             decoration: BoxDecoration(
@@ -323,30 +405,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 // 이모지 버튼
                 if (!_isBlocked)
                   IconButton(
-                    icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey),
+                    icon: Icon(
+                      _showEmojiPicker 
+                          ? Icons.keyboard 
+                          : Icons.emoji_emotions_outlined,
+                      color: _showEmojiPicker ? Colors.blue : Colors.grey,
+                    ),
                     onPressed: () {
-                      // TODO: 이모지 피커 구현 (나중에 추가 가능)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('이모지 기능은 곧 추가됩니다!'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
+                      setState(() {
+                        _showEmojiPicker = !_showEmojiPicker;
+                      });
+                      if (_showEmojiPicker) {
+                        FocusScope.of(context).unfocus();
+                      }
                     },
                   ),
                 // 파일 첨부 버튼
                 if (!_isBlocked)
                   IconButton(
                     icon: const Icon(Icons.attach_file, color: Colors.grey),
-                    onPressed: () {
-                      // TODO: 파일 첨부 기능 구현 (나중에 추가 가능)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('파일 첨부 기능은 곧 추가됩니다!'),
-                          duration: Duration(seconds: 1),
-                        ),
-                      );
-                    },
+                    onPressed: _pickFile,
                   ),
                 Expanded(
                   child: TextField(
@@ -380,6 +458,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     maxLines: null,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendMessage(),
+                    onTap: () {
+                      if (_showEmojiPicker) {
+                        setState(() {
+                          _showEmojiPicker = false;
+                        });
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -752,5 +837,161 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       },
     );
+  }
+
+  /// 차단 해제 다이얼로그
+  void _showUnblockDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green, size: 24),
+              SizedBox(width: 8),
+              Text('차단 해제'),
+            ],
+          ),
+          content: Text(
+            '${widget.friendName}님의 차단을 해제하시겠습니까?\n\n'
+            '해제하면:\n'
+            '• 다시 메시지를 주고받을 수 있습니다\n'
+            '• 친구 목록에 다시 추가할 수 있습니다\n'
+            '• 게시글을 볼 수 있습니다',
+            style: const TextStyle(fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                
+                final success = await ApiService.unblockUser(widget.friendId);
+                
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${widget.friendName}님의 차단을 해제했습니다')),
+                  );
+                  // 차단 상태 갱신
+                  await _checkBlockStatus();
+                }
+              },
+              child: const Text(
+                '해제',
+                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 신고 취소 다이얼로그
+  void _showUnreportDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.undo, color: Colors.blue, size: 24),
+              SizedBox(width: 8),
+              Text('신고 취소'),
+            ],
+          ),
+          content: const Text(
+            '신고를 취소하시겠습니까?\n\n'
+            '관리자 검토가 진행 중인 경우\n'
+            '취소할 수 없습니다.',
+            style: TextStyle(fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('닫기'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                
+                if (_reportId != null) {
+                  final success = await ApiService.cancelReport(_reportId!);
+                  
+                  if (success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('신고를 취소했습니다')),
+                    );
+                    // 신고 상태 갱신
+                    await _checkReportStatus();
+                  }
+                }
+              },
+              child: const Text(
+                '취소하기',
+                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 파일 선택
+  Future<void> _pickFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx', 'txt'],
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        
+        // 파일 크기 제한 (10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('파일 크기는 10MB 이하여야 합니다')),
+            );
+          }
+          return;
+        }
+
+        // TODO: 실제 파일 업로드 구현
+        // 현재는 파일 이름만 메시지로 전송
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('파일 선택됨: ${file.name}\n\n파일 업로드 기능은 서버에 업로드 API가 필요합니다.'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          
+          // 파일 이름을 메시지로 전송 (임시)
+          setState(() {
+            _messageController.text = '[파일] ${file.name}';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('파일 선택 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('파일 선택 실패: $e')),
+        );
+      }
+    }
   }
 }
