@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ..models import User, UserFriendship
+from ..models import User, UserFriendship, UserBlock
 from ..db import engine
 from sqlmodel import Session, select
 from ..routers.users import get_current_user
@@ -31,10 +31,19 @@ def add_friend(target_user_id: int, current_user: User = Depends(get_current_use
 @router.get("/friends/me", response_model=list[UserRead])
 def list_friends(current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
+        # 차단한 사용자 ID 목록 조회
+        blocked_statement = select(UserBlock.blocked_user_id).where(
+            UserBlock.user_id == current_user.id
+        )
+        blocked_ids = [row for row in session.exec(blocked_statement).all()]
+        
         statement = select(UserFriendship).where(UserFriendship.user_id == current_user.id)
         rows = session.exec(statement).all()
         friends = []
         for row in rows:
+            # 차단한 사용자는 제외
+            if row.friend_user_id in blocked_ids:
+                continue
             u = session.get(User, row.friend_user_id)
             if u:
                 friends.append(UserRead(id=u.id, name=u.name, birth_year=u.birth_year, region=u.region, school_name=u.school_name))

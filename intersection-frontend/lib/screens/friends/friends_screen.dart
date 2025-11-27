@@ -174,16 +174,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
       Navigator.pop(context);
 
       // 채팅 화면으로 이동
-      Navigator.push(
-        context,
-        MaterialPageRoute(
+            Navigator.push(
+              context,
+              MaterialPageRoute(
           builder: (_) => ChatScreen(
             roomId: chatRoom.id,
             friendId: friend.id,
             friendName: friend.name,
-          ),
         ),
-      );
+      ),
+    );
     } catch (e) {
       if (!mounted) return;
 

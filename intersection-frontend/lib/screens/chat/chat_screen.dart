@@ -109,7 +109,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (_isBlocked) {
+    if (_isBlocked || _iReportedThem) {
       _showBlockedDialog();
       return;
     }
@@ -157,7 +157,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _showBlockedDialog() {
     String message;
-    if (_iBlockedThem) {
+    if (_iReportedThem) {
+      message = "신고한 사용자에게는 메시지를 보낼 수 없습니다.\n신고를 취소하려면 메뉴에서 신고 취소를 선택해주세요.";
+    } else if (_iBlockedThem) {
       message = "차단한 사용자에게는 메시지를 보낼 수 없습니다.\n차단을 해제하려면 프로필 설정에서 해제해주세요.";
     } else if (_theyBlockedMe) {
       message = "상대방이 회원님을 차단하여 메시지를 보낼 수 없습니다.";
@@ -293,23 +295,29 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // 차단 상태 안내
-          if (_isBlocked)
+          // 차단/신고 상태 안내
+          if (_isBlocked || _iReportedThem)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              color: Colors.red.shade50,
+              color: _iReportedThem ? Colors.orange.shade50 : Colors.red.shade50,
               child: Row(
                 children: [
-                  Icon(Icons.block, color: Colors.red.shade700, size: 20),
+                  Icon(
+                    _iReportedThem ? Icons.report : Icons.block,
+                    color: _iReportedThem ? Colors.orange.shade700 : Colors.red.shade700,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _iBlockedThem
-                          ? "차단한 사용자입니다. 메시지를 보낼 수 없습니다."
-                          : "상대방이 회원님을 차단하여 메시지를 보낼 수 없습니다.",
+                      _iReportedThem
+                          ? "신고한 사용자입니다. 메시지를 보낼 수 없습니다."
+                          : _iBlockedThem
+                              ? "차단한 사용자입니다. 메시지를 보낼 수 없습니다."
+                              : "상대방이 회원님을 차단하여 메시지를 보낼 수 없습니다.",
                       style: TextStyle(
-                        color: Colors.red.shade700,
+                        color: _iReportedThem ? Colors.orange.shade700 : Colors.red.shade700,
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -335,7 +343,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              _isBlocked
+                              (_isBlocked || _iReportedThem)
                                   ? "대화가 차단되었습니다"
                                   : "첫 메시지를 보내보세요!",
                               style: TextStyle(
@@ -389,7 +397,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(
               children: [
                 // 이모지 버튼
-                if (!_isBlocked)
+                if (!_isBlocked && !_iReportedThem)
                   IconButton(
                     icon: Icon(
                       _showEmojiPicker 
@@ -407,7 +415,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
                 // 파일 첨부 버튼
-                if (!_isBlocked)
+                if (!_isBlocked && !_iReportedThem)
                   IconButton(
                     icon: const Icon(Icons.attach_file, color: Colors.grey),
                     onPressed: _pickFile,
@@ -415,9 +423,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    enabled: !_isBlocked,
+                    enabled: !_isBlocked && !_iReportedThem,
                     decoration: InputDecoration(
-                      hintText: _isBlocked
+                      hintText: (_isBlocked || _iReportedThem)
                           ? "메시지를 보낼 수 없습니다"
                           : "메시지를 입력하세요...",
                       border: OutlineInputBorder(
@@ -455,12 +463,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(
-                  onTap: _isSending || _isBlocked ? null : _sendMessage,
+                  onTap: _isSending || _isBlocked || _iReportedThem ? null : _sendMessage,
                   child: Container(
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: _isSending || _isBlocked ? Colors.grey : Colors.blue,
+                      color: _isSending || _isBlocked || _iReportedThem ? Colors.grey : Colors.blue,
                       shape: BoxShape.circle,
                     ),
                     child: _isSending
@@ -751,6 +759,11 @@ class _ChatScreenState extends State<ChatScreen> {
                           content: Text('신고가 접수되었습니다. 검토 후 조치하겠습니다.'),
                         ),
                       );
+                      // 신고 후 채팅창 비활성화 (차단과 동일하게 처리)
+                      await _checkReportStatus();
+                      setState(() {
+                        _iReportedThem = true;
+                      });
                     }
                   },
                   child: const Text(
