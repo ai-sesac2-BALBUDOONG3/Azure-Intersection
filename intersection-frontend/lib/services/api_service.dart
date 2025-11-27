@@ -300,4 +300,70 @@ class ApiService {
       throw Exception("메시지 전송 실패: ${response.body}");
     }
   }
+
+  // ----------------------------------------------------
+  // 🚫 차단 & 신고 API
+  // ----------------------------------------------------
+  
+  /// 사용자 차단
+  static Future<bool> blockUser(int userId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/block");
+
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({"blocked_user_id": userId}),
+    );
+
+    return response.statusCode == 200;
+  }
+
+  /// 사용자 차단 해제
+  static Future<bool> unblockUser(int userId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/block/$userId");
+
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
+
+    return response.statusCode == 200;
+  }
+
+  /// 차단 목록 조회
+  static Future<List<int>> getBlockedUserIds() async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/blocked");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+      return list.map((item) => item['blocked_user_id'] as int).toList();
+    }
+    return [];
+  }
+
+  /// 사용자 신고
+  static Future<bool> reportUser({
+    required int userId,
+    required String reason,
+    String? content,
+  }) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/report");
+
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({
+        "reported_user_id": userId,
+        "reason": reason,
+        "content": content,
+      }),
+    );
+
+    return response.statusCode == 200;
+  }
 }

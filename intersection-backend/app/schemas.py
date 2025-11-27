@@ -99,3 +99,37 @@ class ChatMessageRead(BaseModel):
     content: str
     is_read: bool
     created_at: str
+
+
+# ------------------------------------------------------
+# 🚫 차단 & 신고 스키마
+# ------------------------------------------------------
+class UserBlockCreate(BaseModel):
+    """사용자 차단 요청"""
+    blocked_user_id: int
+
+
+class UserBlockRead(BaseModel):
+    """차단 목록 조회 응답"""
+    id: int
+    user_id: int
+    blocked_user_id: int
+    blocked_user_name: Optional[str] = None
+    created_at: str
+
+
+class UserReportCreate(BaseModel):
+    """사용자 신고 요청"""
+    reported_user_id: int
+    reason: str  # 신고 사유 (스팸, 욕설, 허위정보 등)
+    content: Optional[str] = None  # 상세 내용
+
+
+class UserReportRead(BaseModel):
+    """신고 내역 조회 응답"""
+    id: int
+    reporter_id: int
+    reported_user_id: int
+    reason: str
+    status: str
+    created_at: str

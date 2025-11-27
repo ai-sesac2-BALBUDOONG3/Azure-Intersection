@@ -1,6 +1,13 @@
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+# 한국 시간대 (KST = UTC+9)
+KST = timezone(timedelta(hours=9))
+
+def get_kst_now():
+    """현재 한국 시간을 반환"""
+    return datetime.now(KST)
 
 # ------------------------------------------------------
 # 1. Community (커뮤니티) 모델 추가
@@ -14,7 +21,7 @@ class Community(SQLModel, table=True):
     admission_year: int
     region: str
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
 
     # 이 커뮤니티에 속한 유저들 (User 모델과 연결)
     users: List["User"] = Relationship(back_populates="community")
@@ -47,7 +54,7 @@ class User(SQLModel, table=True):
     community_id: Optional[int] = Field(default=None, foreign_key="community.id")
     community: Optional[Community] = Relationship(back_populates="users")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
 
 
 
@@ -61,7 +68,7 @@ class Post(SQLModel, table=True):
 # 📷 [추가됨] 게시글 이미지 URL (여러 장이면 쉼표로 구분하거나 별도 테이블 필요하지만, 일단 1장으로 시작)
     image_url: Optional[str] = None
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
     updated_at: Optional[datetime] = None
 
 class Comment(SQLModel, table=True):
@@ -69,14 +76,14 @@ class Comment(SQLModel, table=True):
     post_id: int = Field(foreign_key="post.id")
     user_id: int = Field(foreign_key="user.id")
     content: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
 
 class UserFriendship(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
     friend_user_id: int = Field(foreign_key="user.id")
     status: Optional[str] = "accepted"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
 
 
 # ------------------------------------------------------
@@ -87,8 +94,8 @@ class ChatRoom(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user1_id: int = Field(foreign_key="user.id")  # 채팅방 생성자
     user2_id: int = Field(foreign_key="user.id")  # 채팅 상대방
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)  # 마지막 메시지 시간
+    created_at: datetime = Field(default_factory=get_kst_now)
+    updated_at: datetime = Field(default_factory=get_kst_now)  # 마지막 메시지 시간
 
 
 class ChatMessage(SQLModel, table=True):
@@ -98,4 +105,26 @@ class ChatMessage(SQLModel, table=True):
     sender_id: int = Field(foreign_key="user.id")
     content: str  # 메시지 내용
     is_read: bool = Field(default=False)  # 읽음 여부
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=get_kst_now)
+
+
+# ------------------------------------------------------
+# 🚫 차단 & 신고 모델
+# ------------------------------------------------------
+class UserBlock(SQLModel, table=True):
+    """사용자 차단 모델"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")  # 차단한 사람
+    blocked_user_id: int = Field(foreign_key="user.id")  # 차단된 사람
+    created_at: datetime = Field(default_factory=get_kst_now)
+
+
+class UserReport(SQLModel, table=True):
+    """사용자 신고 모델"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    reporter_id: int = Field(foreign_key="user.id")  # 신고한 사람
+    reported_user_id: int = Field(foreign_key="user.id")  # 신고된 사람
+    reason: str  # 신고 사유
+    content: Optional[str] = None  # 상세 내용
+    status: str = Field(default="pending")  # pending, reviewed, resolved
+    created_at: datetime = Field(default_factory=get_kst_now)

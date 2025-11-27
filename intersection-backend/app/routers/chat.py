@@ -2,9 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from typing import List
-from datetime import datetime
 
-from ..models import ChatRoom, ChatMessage, User
+from ..models import ChatRoom, ChatMessage, User, get_kst_now
 from ..schemas import ChatRoomCreate, ChatRoomRead, ChatMessageCreate, ChatMessageRead
 from ..db import engine
 from ..auth import decode_access_token
@@ -241,8 +240,8 @@ def send_chat_message(
         )
         session.add(message)
         
-        # 채팅방 업데이트 시간 갱신
-        room.updated_at = datetime.utcnow()
+        # 채팅방 업데이트 시간 갱신 (한국 시간)
+        room.updated_at = get_kst_now()
         
         session.commit()
         session.refresh(message)
@@ -312,9 +311,9 @@ async def websocket_chat(websocket: WebSocket, room_id: int, token: str):
                 )
                 session.add(message)
                 
-                # 채팅방 업데이트 시간 갱신
+                # 채팅방 업데이트 시간 갱신 (한국 시간)
                 room = session.get(ChatRoom, room_id)
-                room.updated_at = datetime.utcnow()
+                room.updated_at = get_kst_now()
                 
                 session.commit()
                 session.refresh(message)
