@@ -112,6 +112,34 @@ def get_blocked_users(current_user_id: int = Depends(get_current_user_id)):
         return result
 
 
+@router.get("/is-blocked/{user_id}")
+def check_if_blocked(
+    user_id: int,
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """두 사용자 간 차단 여부 확인 (양방향)"""
+    with Session(engine) as session:
+        # 내가 상대방을 차단했는지
+        statement1 = select(UserBlock).where(
+            UserBlock.user_id == current_user_id,
+            UserBlock.blocked_user_id == user_id
+        )
+        i_blocked = session.exec(statement1).first()
+        
+        # 상대방이 나를 차단했는지
+        statement2 = select(UserBlock).where(
+            UserBlock.user_id == user_id,
+            UserBlock.blocked_user_id == current_user_id
+        )
+        blocked_me = session.exec(statement2).first()
+        
+        return {
+            "is_blocked": i_blocked is not None or blocked_me is not None,
+            "i_blocked_them": i_blocked is not None,
+            "they_blocked_me": blocked_me is not None
+        }
+
+
 # ------------------------------------------------------
 # 📢 신고 기능
 # ------------------------------------------------------

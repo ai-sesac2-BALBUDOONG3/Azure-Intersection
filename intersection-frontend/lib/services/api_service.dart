@@ -346,6 +346,25 @@ class ApiService {
     return [];
   }
 
+  /// 차단 여부 확인 (양방향)
+  static Future<Map<String, dynamic>> checkIfBlocked(int userId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/is-blocked/$userId");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    return {
+      "is_blocked": false,
+      "i_blocked_them": false,
+      "they_blocked_me": false,
+    };
+  }
+
   /// 사용자 신고
   static Future<bool> reportUser({
     required int userId,

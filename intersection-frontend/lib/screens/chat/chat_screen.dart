@@ -26,11 +26,15 @@ class _ChatScreenState extends State<ChatScreen> {
   List<ChatMessage> _messages = [];
   bool _isLoading = true;
   bool _isSending = false;
+  bool _isBlocked = false;
+  bool _iBlockedThem = false;
+  bool _theyBlockedMe = false;
   Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
+    _checkBlockStatus();
     _loadMessages();
     // 3초마다 새 메시지 확인 (실시간처럼 동작)
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
@@ -44,6 +48,21 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBlockStatus() async {
+    try {
+      final result = await ApiService.checkIfBlocked(widget.friendId);
+      if (mounted) {
+        setState(() {
+          _isBlocked = result['is_blocked'] ?? false;
+          _iBlockedThem = result['i_blocked_them'] ?? false;
+          _theyBlockedMe = result['they_blocked_me'] ?? false;
+        });
+      }
+    } catch (e) {
+      debugPrint("차단 상태 확인 오류: $e");
+    }
   }
 
   Future<void> _loadMessages({bool showLoading = true}) async {
@@ -69,6 +88,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendMessage() async {
+    if (_isBlocked) {
+      _showBlockedDialog();
+      return;
+    }
+
     final content = _messageController.text.trim();
     if (content.isEmpty || _isSending) return;
 
@@ -108,6 +132,38 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     });
+  }
+
+  void _showBlockedDialog() {
+    String message;
+    if (_iBlockedThem) {
+      message = "차단한 사용자에게는 메시지를 보낼 수 없습니다.\n차단을 해제하려면 프로필 설정에서 해제해주세요.";
+    } else if (_theyBlockedMe) {
+      message = "상대방이 회원님을 차단하여 메시지를 보낼 수 없습니다.";
+    } else {
+      message = "이 사용자와 메시지를 주고받을 수 없습니다.";
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.block, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('메시지 전송 불가', style: TextStyle(fontSize: 18)),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -169,9 +225,34 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      backgroundColor: const Color(0xFFB2C7D9),  // 카카오톡 스타일 배경색
       body: Column(
         children: [
+          // 차단 상태 안내
+          if (_isBlocked)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: Colors.red.shade50,
+              child: Row(
+                children: [
+                  Icon(Icons.block, color: Colors.red.shade700, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _iBlockedThem
+                          ? "차단한 사용자입니다. 메시지를 보낼 수 없습니다."
+                          : "상대방이 회원님을 차단하여 메시지를 보낼 수 없습니다.",
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 메시지 목록
           Expanded(
             child: _isLoading
@@ -184,15 +265,16 @@ class _ChatScreenState extends State<ChatScreen> {
                             Icon(
                               Icons.chat_bubble_outline,
                               size: 64,
-                              color: Colors.white.withOpacity(0.7),
+                              color: Colors.grey.shade300,
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              "첫 메시지를 보내보세요!",
+                              _isBlocked
+                                  ? "대화가 차단되었습니다"
+                                  : "첫 메시지를 보내보세요!",
                               style: TextStyle(
                                 fontSize: 16,
-                                color: Colors.white.withOpacity(0.9),
-                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade600,
                               ),
                             ),
                           ],
@@ -226,21 +308,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    enabled: !_isBlocked,
                     decoration: InputDecoration(
-                      hintText: "메시지를 입력하세요...",
-                      filled: true,
-                      fillColor: Colors.white,
+                      hintText: _isBlocked
+                          ? "메시지를 보낼 수 없습니다"
+                          : "메시지를 입력하세요...",
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      disabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide(color: Colors.grey.shade200),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+                        borderSide: const BorderSide(color: Colors.blue),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -254,29 +341,27 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 12),
                 GestureDetector(
-                  onTap: _isSending ? null : _sendMessage,
+                  onTap: _isSending || _isBlocked ? null : _sendMessage,
                   child: Container(
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
-                      color: _isSending
-                          ? Colors.grey.shade400
-                          : const Color(0xFFFFEB33),  // 카카오톡 노란색
+                      color: _isSending || _isBlocked ? Colors.grey : Colors.blue,
                       shape: BoxShape.circle,
                     ),
                     child: _isSending
                         ? const Padding(
-                            padding: EdgeInsets.all(10),
+                            padding: EdgeInsets.all(12),
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.black54),
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : const Icon(
-                            Icons.arrow_upward,
-                            color: Colors.black87,
-                            size: 22,
+                            Icons.send,
+                            color: Colors.white,
+                            size: 24,
                           ),
                   ),
                 ),
@@ -292,85 +377,45 @@ class _ChatScreenState extends State<ChatScreen> {
     final isMe = message.senderId == AppState.currentUser?.id;
     final time = _formatTime(message.createdAt);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // 내가 보낸 메시지: 읽음 표시와 시간
-          if (isMe) ...[
-            // 읽음 여부 표시
-            Padding(
-              padding: const EdgeInsets.only(right: 4, bottom: 4),
-              child: Text(
-                message.isRead ? '' : '1',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.amber.shade700,
-                ),
-              ),
-            ),
-            // 시간
-            Padding(
-              padding: const EdgeInsets.only(right: 6, bottom: 4),
-              child: Text(
-                time,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ),
-          ],
-
-          // 메시지 말풍선
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.65,
-            ),
-            decoration: BoxDecoration(
-              color: isMe ? const Color(0xFFFFEB33) : Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: isMe ? const Radius.circular(18) : const Radius.circular(4),
-                bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.blue : Colors.grey.shade200,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: isMe ? const Radius.circular(20) : const Radius.circular(4),
+            bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(20),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Text(
               message.content,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: Colors.black87,
+                color: isMe ? Colors.white : Colors.black87,
                 height: 1.4,
               ),
             ),
-          ),
-
-          // 상대방 메시지: 시간만
-          if (!isMe)
-            Padding(
-              padding: const EdgeInsets.only(left: 6, bottom: 4),
-              child: Text(
-                time,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
+            const SizedBox(height: 4),
+            Text(
+              time,
+              style: TextStyle(
+                fontSize: 11,
+                color: isMe ? Colors.white70 : Colors.grey.shade600,
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -378,6 +423,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String _formatTime(String isoString) {
     try {
       final dateTime = DateTime.parse(isoString);
+      // KST 시간으로 표시 (이미 백엔드에서 KST로 저장되어 옴)
       final hour = dateTime.hour.toString().padLeft(2, '0');
       final minute = dateTime.minute.toString().padLeft(2, '0');
       return "$hour:$minute";
@@ -422,7 +468,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('${widget.friendName}님을 차단했습니다')),
                   );
-                  Navigator.pop(context); // 채팅 화면 닫기
+                  // 차단 상태 갱신
+                  await _checkBlockStatus();
                 }
               },
               child: const Text(
