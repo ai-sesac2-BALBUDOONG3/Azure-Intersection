@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
+from sqlalchemy import or_
 from typing import List
 
 from ..models import ChatRoom, ChatMessage, User, get_kst_now
@@ -64,8 +65,10 @@ def create_or_get_chat_room(
         
         # 기존 채팅방 확인 (user1_id와 user2_id 순서 무관)
         statement = select(ChatRoom).where(
-            ((ChatRoom.user1_id == current_user_id) & (ChatRoom.user2_id == friend_id)) |
-            ((ChatRoom.user1_id == friend_id) & (ChatRoom.user2_id == current_user_id))
+            or_(
+                (ChatRoom.user1_id == current_user_id) & (ChatRoom.user2_id == friend_id),
+                (ChatRoom.user1_id == friend_id) & (ChatRoom.user2_id == current_user_id)
+            )
         )
         existing_room = session.exec(statement).first()
         
@@ -123,8 +126,15 @@ def get_my_chat_rooms(current_user_id: int = Depends(get_current_user_id)):
     with Session(engine) as session:
         # 내가 user1 또는 user2인 채팅방 조회 (나간 채팅방 제외)
         statement = select(ChatRoom).where(
-            ((ChatRoom.user1_id == current_user_id) | (ChatRoom.user2_id == current_user_id)) &
-            (ChatRoom.left_user_id != current_user_id)  # 나간 채팅방 제외
+            or_(
+                ChatRoom.user1_id == current_user_id,
+                ChatRoom.user2_id == current_user_id
+            )
+        ).where(
+            or_(
+                ChatRoom.left_user_id != current_user_id,
+                ChatRoom.left_user_id == None
+            )
         ).order_by(ChatRoom.updated_at.desc())
         
         rooms = session.exec(statement).all()
@@ -199,6 +209,7 @@ def get_chat_messages(
         
         session.commit()
         
+        # ✅ 파일 정보 포함하여 반환
         return [
             ChatMessageRead(
                 id=msg.id,
@@ -207,14 +218,19 @@ def get_chat_messages(
                 content=msg.content,
                 message_type=msg.message_type,
                 is_read=msg.is_read,
-                created_at=msg.created_at.isoformat()
+                created_at=msg.created_at.isoformat(),
+                # ✅ 파일 정보 추가
+                file_url=msg.file_url,
+                file_name=msg.file_name,
+                file_size=msg.file_size,
+                file_type=msg.file_type
             )
             for msg in messages
         ]
 
 
 # ------------------------------------------------------
-# 4. 메시지 전송 (REST API)
+# 4. 메시지 전송 (REST API) - ✅ 파일 업로드 지원
 # ------------------------------------------------------
 @router.post("/rooms/{room_id}/messages", response_model=ChatMessageRead)
 def send_chat_message(
@@ -224,6 +240,7 @@ def send_chat_message(
 ):
     """
     채팅방에 메시지를 전송합니다.
+    파일 업로드 지원 - file_url이 있으면 파일 메시지로 전송
     """
     with Session(engine) as session:
         # 채팅방 권한 확인
@@ -235,15 +252,29 @@ def send_chat_message(
             raise HTTPException(status_code=403, detail="Not authorized")
         
         # 나간 채팅방인지 확인
-        if room.left_user_id == current_user_id:
+        if room.left_user_id is not None and room.left_user_id == current_user_id:
             raise HTTPException(status_code=403, detail="나간 채팅방에서는 메시지를 보낼 수 없습니다")
+        
+        # ✅ 메시지 타입 결정
+        message_type = "normal"
+        if data.file_url:
+            # 파일 타입에 따라 구분
+            if data.file_type and data.file_type.startswith("image/"):
+                message_type = "image"
+            else:
+                message_type = "file"
         
         # 메시지 생성
         message = ChatMessage(
             room_id=room_id,
             sender_id=current_user_id,
             content=data.content,
-            message_type="normal"
+            message_type=message_type,
+            # ✅ 파일 정보 저장
+            file_url=data.file_url,
+            file_name=data.file_name,
+            file_size=data.file_size,
+            file_type=data.file_type
         )
         session.add(message)
         
@@ -260,7 +291,12 @@ def send_chat_message(
             content=message.content,
             message_type=message.message_type,
             is_read=message.is_read,
-            created_at=message.created_at.isoformat()
+            created_at=message.created_at.isoformat(),
+            # ✅ 파일 정보 반환
+            file_url=message.file_url,
+            file_name=message.file_name,
+            file_size=message.file_size,
+            file_type=message.file_type
         )
 
 
@@ -283,9 +319,6 @@ def leave_chat_room(
         if room.left_user_id == current_user_id:
             raise HTTPException(status_code=400, detail="이미 나간 채팅방입니다")
         
-        # 상대방 ID 확인
-        other_user_id = room.user2_id if room.user1_id == current_user_id else room.user1_id
-        
         # 나간 사용자로 표시
         room.left_user_id = current_user_id
         session.add(room)
@@ -293,7 +326,7 @@ def leave_chat_room(
         # 상대방에게 시스템 메시지 전송
         system_message = ChatMessage(
             room_id=room_id,
-            sender_id=current_user_id,  # 나간 사용자 ID
+            sender_id=current_user_id,
             content="상대방이 채팅방을 나갔습니다.",
             message_type="system",
             is_read=False
@@ -388,4 +421,3 @@ async def websocket_chat(websocket: WebSocket, room_id: int, token: str):
     
     except WebSocketDisconnect:
         manager.disconnect(user_id)
-

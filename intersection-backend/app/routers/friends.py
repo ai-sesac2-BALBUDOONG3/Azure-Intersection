@@ -20,6 +20,17 @@ def add_friend(target_user_id: int, current_user: User = Depends(get_current_use
         if not target:
             raise HTTPException(status_code=404, detail="Target user not found")
 
+        # 중복 친구 추가 체크
+        existing_friendship = session.exec(
+            select(UserFriendship).where(
+                UserFriendship.user_id == current_user.id,
+                UserFriendship.friend_user_id == target_user_id
+            )
+        ).first()
+        
+        if existing_friendship:
+            raise HTTPException(status_code=400, detail="Already friends")
+
         # create friendship (simple, auto-accepted)
         friendship = UserFriendship(user_id=current_user.id, friend_user_id=target_user_id)
         session.add(friendship)
