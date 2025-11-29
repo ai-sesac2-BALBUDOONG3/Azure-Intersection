@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .db import create_db_and_tables
-from .config import settings
 
 # 라우터 모듈 불러오기
 from .routers import auth as auth_router
@@ -17,19 +16,21 @@ from .routers import moderation as moderation_router
 
 app = FastAPI(title="Intersection Backend")
 
-# ✅ CORS 설정 (환경별 자동 적용)
-if settings.ENV.lower() == "production" and settings.ALLOWED_ORIGINS:
+# ✅ CORS 설정 (환경별 다르게 설정)
+ENV = os.getenv("ENV", "development")  # 환경 변수로 development/production 구분
+
+if ENV == "production":
     # 🔒 프로덕션: 특정 도메인만 허용
-    allowed_origins_list = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins_list,
+        allow_origins=ALLOWED_ORIGINS,  # 예: ["https://yourdomain.com", "https://www.yourdomain.com"]
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 else:
-    # 🔓 개발: 모든 출처 허용
+    # 🔓 개발 환경: 모든 출처 허용
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -66,7 +67,4 @@ app.include_router(moderation_router.router)
 
 @app.get("/")
 def root():
-    return {
-        "message": "Intersection backend running",
-        "env": settings.ENV
-    }
+    return {"message": "Intersection backend running", "env": ENV}

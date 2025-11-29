@@ -57,15 +57,13 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_kst_now)
 
 
-
-
 # (나머지 Post, Comment 등 기존 코드는 그대로 두시면 됩니다)
 class Post(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     author_id: int = Field(foreign_key="user.id")
     content: str
 
-# 📷 [추가됨] 게시글 이미지 URL (여러 장이면 쉼표로 구분하거나 별도 테이블 필요하지만, 일단 1장으로 시작)
+    # 📷 [추가됨] 게시글 이미지 URL (여러 장이면 쉼표로 구분하거나 별도 테이블 필요하지만, 일단 1장으로 시작)
     image_url: Optional[str] = None
 
     created_at: datetime = Field(default_factory=get_kst_now)
@@ -105,8 +103,15 @@ class ChatMessage(SQLModel, table=True):
     room_id: int = Field(foreign_key="chatroom.id")
     sender_id: int = Field(foreign_key="user.id")
     content: str  # 메시지 내용
-    message_type: str = Field(default="normal")  # normal, system (시스템 메시지)
+    message_type: str = Field(default="normal")  # normal, system, file, image
     is_read: bool = Field(default=False)  # 읽음 여부
+    
+    # ✅ 파일 업로드 관련 필드 추가 (4개)
+    file_url: Optional[str] = None  # 파일 URL
+    file_name: Optional[str] = None  # 원본 파일명
+    file_size: Optional[int] = None  # 파일 크기 (bytes)
+    file_type: Optional[str] = None  # 파일 MIME 타입 (image/jpeg, application/pdf 등)
+    
     created_at: datetime = Field(default_factory=get_kst_now)
 
 

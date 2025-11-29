@@ -29,11 +29,11 @@ class UserRead(BaseModel):
     region: Optional[str] = None
     school_name: Optional[str] = None
 
-# 👇 [추가] 프로필/배경 이미지 URL 필드
+    # 👇 [추가] 프로필/배경 이미지 URL 필드
     profile_image: Optional[str] = None
     background_image: Optional[str] = None
 
-# 🖼️ [추가됨] 프로필 피드에 보여줄 이미지 목록 (URL 문자열 리스트)
+    # 🖼️ [추가됨] 프로필 피드에 보여줄 이미지 목록 (URL 문자열 리스트)
     feed_images: list[str] = []
 
 class UserUpdate(BaseModel):
@@ -100,6 +100,11 @@ class ChatRoomRead(BaseModel):
 class ChatMessageCreate(BaseModel):
     """메시지 전송 요청"""
     content: str
+    # ✅ 파일 업로드 관련 필드 추가 (선택사항)
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    file_type: Optional[str] = None
 
 
 class ChatMessageRead(BaseModel):
@@ -108,9 +113,14 @@ class ChatMessageRead(BaseModel):
     room_id: int
     sender_id: int
     content: str
-    message_type: str = "normal"  # normal, system
+    message_type: str = "normal"  # normal, system, file, image
     is_read: bool
     created_at: str
+    # ✅ 파일 업로드 관련 필드 추가
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    file_type: Optional[str] = None
 
 
 # ------------------------------------------------------
