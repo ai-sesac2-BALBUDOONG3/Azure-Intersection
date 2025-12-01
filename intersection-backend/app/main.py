@@ -16,6 +16,10 @@ from .routers import moderation as moderation_router  # 🚫 차단/신고 라�
 
 app = FastAPI(title="Intersection Backend (dev)")
 
+@app.get("/health", tags=["health"])
+def health_check():
+    return {"status": "ok"}
+
 # 1. CORS 설정 (프론트엔드 접근 허용)
 app.add_middleware(
     CORSMiddleware,
