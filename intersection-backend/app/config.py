@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-secret-for-local-testing"
     # Default development DB is PostgreSQL. Adjust this value to your local Postgres instance.
     # Example: postgresql+psycopg://postgres:postgres@localhost:5432/intersection
-    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/intersection"
+    DATABASE_URL: str = "postgresql+psycopg://postgres:@sesac12@localhost:5432/inter_section"
 
     class Config:
         env_file = ".env"
