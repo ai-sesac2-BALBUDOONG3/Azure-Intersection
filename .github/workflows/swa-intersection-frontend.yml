@@ -37,7 +37,10 @@ jobs:
 
       - name: Build Flutter Web (prod)
         working-directory: intersection-frontend
-        run: flutter build web --release --dart-define=APP_ENV=prod
+        run: >
+          flutter build web --release
+          --dart-define=APP_ENV=prod
+          --dart-define=API_BASE_URL=https://intersection-api-balbudoong-main-ezeqgpdwehcfcvbm.canadacentral-01.azurewebsites.net
 
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1

@@ -2,7 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 
-/// 운영/개발 환경 구분용 enum
+/// 앱 환경 구분용 enum
 enum AppEnvironment {
   dev,
   prod,
@@ -10,12 +10,12 @@ enum AppEnvironment {
 
 class ApiConfig {
   /// 빌드 시점에 넘기는 환경 값
-  /// flutter run/build 명령어에서 --dart-define=APP_ENV=dev|prod
+  /// flutter build ... --dart-define=APP_ENV=dev|prod
   static const String _envString =
       String.fromEnvironment('APP_ENV', defaultValue: 'dev');
 
-  /// 필요 시 강제로 API_BASE_URL를 지정할 수도 있음
-  /// flutter build web ... --dart-define=API_BASE_URL=https://custom-api...
+  /// API_BASE_URL을 직접 지정할 수 있는 옵션
+  /// flutter build ... --dart-define=API_BASE_URL=...
   static const String _overrideBaseUrl =
       String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
@@ -33,10 +33,12 @@ class ApiConfig {
 
   /// 최종 API Base URL
   static String get baseUrl {
+    // 1순위: 명시적으로 dart-define으로 지정한 값
     if (_overrideBaseUrl.isNotEmpty) {
       return _overrideBaseUrl;
     }
 
+    // 2순위: 환경별 기본값
     switch (environment) {
       case AppEnvironment.dev:
         // 로컬 FastAPI
@@ -49,6 +51,15 @@ class ApiConfig {
 
   static bool get isProd => environment == AppEnvironment.prod;
 
-  /// 로그 출력 여부 등에도 활용 가능
+  /// 로그 출력 여부 등
   static bool get enableLogging => !isProd;
+
+  /// 디버깅용: 현재 설정 로그
+  static void debugPrintConfig() {
+    if (kDebugMode) {
+      debugPrint('[ApiConfig] ENV=$_envString '
+          'overrideBaseUrl=$_overrideBaseUrl '
+          'baseUrl=$baseUrl');
+    }
+  }
 }
