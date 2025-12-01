@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:intersection/data/app_state.dart';
 import 'package:intersection/data/signup_form_data.dart';
@@ -92,7 +93,9 @@ class IntersectionApp extends StatelessWidget {
             side: const BorderSide(color: Colors.black, width: 1.0),
             foregroundColor: Colors.black,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         ),
 
@@ -178,14 +181,6 @@ class IntersectionApp extends StatelessWidget {
               builder: (_) => const FriendsScreen(),
             );
 
-          case '/comments':
-            if (args is Post) {
-              return MaterialPageRoute(
-                builder: (_) => CommentScreen(post: args),
-              );
-            }
-            return _error("게시물 정보가 누락되었습니다.");
-
           case '/write':
             return MaterialPageRoute(
               builder: (_) => const CommunityWriteScreen(),
@@ -199,6 +194,28 @@ class IntersectionApp extends StatelessWidget {
             }
             return _error("게시물 정보가 누락되었습니다.");
 
+          // =============================================
+          // 🔥 댓글은 투명 Route + BottomSheet 조합
+          // =============================================
+          case '/comments':
+            if (args is Post) {
+              return PageRouteBuilder(
+                opaque: false,
+                pageBuilder: (context, animation, secondaryAnimation) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    openCommentSheet(context, args).whenComplete(() {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      }
+                    });
+                  });
+
+                  return const SizedBox.shrink();
+                },
+              );
+            }
+            return _error("게시물 정보가 누락되었습니다.");
+
           default:
             return _error("존재하지 않는 페이지입니다.");
         }
@@ -206,21 +223,14 @@ class IntersectionApp extends StatelessWidget {
     );
   }
 
-  /// --------------------------------------------------------------------
-  /// 🔥 최초 진입 화면 분기
-  /// --------------------------------------------------------------------
+  /// 최초 화면 분기
   Widget _initialScreen() {
-    // 1) 로그인 안됨 → 랜딩
     if (AppState.currentUser == null) {
       return const LandingScreen();
     }
-
-    // 2) 회원가입 직후 → 추천 친구
     if (AppState.isNewUser == true) {
       return const RecommendedFriendsScreen();
     }
-
-    // 3) 기존 로그인 사용자 → 메인탭(친구목록 포함)
     return const MainTabScreen();
   }
 
@@ -228,9 +238,7 @@ class IntersectionApp extends StatelessWidget {
     return MaterialPageRoute(
       builder: (_) => Scaffold(
         appBar: AppBar(title: const Text("오류")),
-        body: Center(
-          child: Text(msg),
-        ),
+        body: Center(child: Text(msg)),
       ),
     );
   }
