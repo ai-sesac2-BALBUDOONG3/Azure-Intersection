@@ -1,0 +1,50 @@
+# .github/workflows/swa-intersection-frontend.yml
+name: Build and deploy Flutter Web to Azure Static Web Apps
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'intersection-frontend/**'
+      - '.github/workflows/swa-intersection-frontend.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+    paths:
+      - 'intersection-frontend/**'
+      - '.github/workflows/swa-intersection-frontend.yml'
+
+jobs:
+  build_and_deploy_job:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Flutter pub get
+        working-directory: intersection-frontend
+        run: flutter pub get
+
+      - name: Build Flutter Web (prod)
+        working-directory: intersection-frontend
+        run: flutter build web --release --dart-define=APP_ENV=prod
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "intersection-frontend"
+          api_location: ""
+          output_location: "build/web"
