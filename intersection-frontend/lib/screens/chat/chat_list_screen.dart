@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../models/chat_room.dart';
 import '../../services/api_service.dart';
 import '../../data/app_state.dart';
+import '../../config/api_config.dart';
 import 'chat_screen.dart';
+import 'dart:async';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -14,28 +16,46 @@ class ChatListScreen extends StatefulWidget {
 class _ChatListScreenState extends State<ChatListScreen> {
   List<ChatRoom> _chatRooms = [];
   bool _isLoading = true;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _loadChatRooms();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _loadChatRooms(showLoading: false);
+    });
   }
 
-  Future<void> _loadChatRooms() async {
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadChatRooms({bool showLoading = true}) async {
     if (AppState.token == null) {
-      setState(() => _isLoading = false);
+      if (showLoading) {
+        setState(() => _isLoading = false);
+      }
       return;
     }
 
     try {
       final rooms = await ApiService.getMyChatRooms();
-      setState(() {
-        _chatRooms = rooms;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _chatRooms = rooms;
+          if (showLoading) {
+            _isLoading = false;
+          }
+        });
+      }
     } catch (e) {
       debugPrint("채팅방 목록 불러오기 오류: $e");
-      setState(() => _isLoading = false);
+      if (mounted && showLoading) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -96,7 +116,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildChatRoomTile(ChatRoom room) {
-    // 시간 포맷팅
     String timeText = "";
     if (room.lastMessageTime != null) {
       try {
@@ -122,18 +141,27 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      leading: CircleAvatar(
-        radius: 28,
-        backgroundColor: Colors.blue.shade100,
-        child: Text(
-          room.friendName?.substring(0, 1) ?? "?",
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.blue.shade700,
-          ),
-        ),
-      ),
+      leading: room.friendProfileImage != null
+          ? CircleAvatar(
+              radius: 28,
+              backgroundImage: NetworkImage(
+                "${ApiConfig.baseUrl}${room.friendProfileImage}",
+              ),
+              onBackgroundImageError: (_, __) {},
+              child: null,
+            )
+          : CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.blue.shade100,
+              child: Text(
+                room.friendName?.substring(0, 1) ?? "?",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade700,
+                ),
+              ),
+            ),
       title: Row(
         children: [
           Expanded(
@@ -157,6 +185,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
       ),
       subtitle: Row(
         children: [
+          if (room.isLastMessageImage && room.lastFileUrl != null) ...[
+            Container(
+              margin: const EdgeInsets.only(right: 8, top: 4),
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Image.network(
+                  "${ApiConfig.baseUrl}${room.lastFileUrl}",
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.image,
+                    size: 20,
+                    color: Colors.grey.shade400,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          
           Expanded(
             child: Text(
               room.lastMessage ?? "메시지가 없습니다",
@@ -200,9 +252,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
               roomId: room.id,
               friendId: room.friendId,
               friendName: room.friendName ?? "Unknown",
+              friendProfileImage: room.friendProfileImage,
+              iReportedThem: room.iReportedThem,
+              theyBlockedMe: room.theyBlockedMe,
+              theyLeft: room.theyLeft,  // ✅ 추가
             ),
           ),
-        ).then((_) => _loadChatRooms()); // 채팅 화면에서 돌아오면 새로고침
+        ).then((_) => _loadChatRooms());
       },
     );
   }

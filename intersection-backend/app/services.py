@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 from sqlalchemy import case, desc
-from .models import Community, User, UserFriendship, UserBlock  # 👈 UserBlock 추가됨
+from .models import Community, User, UserFriendship, UserBlock, UserReport  # 👈 UserReport 추가됨
 
 def assign_community(session: Session, user: User) -> User:
     """
@@ -39,6 +39,7 @@ def get_recommended_friends(session: Session, user: User, limit: int = 20) -> li
     - 학교, 입학년도, 지역이 일치하는 항목마다 점수를 부여 (+1점씩)
     - 🔥 [수정됨] 이미 친구 추가한 사람은 목록에서 제외합니다.
     - 🔥 [수정됨] 차단한 사용자도 목록에서 제외합니다.
+    - 🔥 [수정됨] 신고한 사용자도 목록에서 제외합니다.
     - 점수가 높은 순으로 정렬하여 반환
     """
     
@@ -52,21 +53,28 @@ def get_recommended_friends(session: Session, user: User, limit: int = 20) -> li
     blocked_subquery = select(UserBlock.blocked_user_id).where(
         UserBlock.user_id == user.id
     )
+    
+    # 3. 내가 신고한 사용자들의 ID 목록 조회 (SubQuery) - pending 상태만
+    reported_subquery = select(UserReport.reported_user_id).where(
+        UserReport.reporter_id == user.id,
+        UserReport.status == "pending"
+    )
 
-    # 3. 점수 계산 로직
+    # 4. 점수 계산 로직
     score_expression = (
         case((User.school_name == user.school_name, 1), else_=0) +
         case((User.admission_year == user.admission_year, 1), else_=0) +
         case((User.region == user.region, 1), else_=0)
     ).label("score")
 
-    # 4. 쿼리 작성 (친구 제외 + 차단 제외 조건 추가)
+    # 5. 쿼리 작성 (친구 제외 + 차단 제외 + 신고 제외 조건 추가)
     statement = (
         select(User, score_expression)
         .where(User.id != user.id)   # 나 자신 제외
         .where(User.name.isnot(None)) # 유령 회원 제외
         .where(User.id.notin_(friend_subquery)) # 🔥 핵심: 이미 친구인 사람 제외!
         .where(User.id.notin_(blocked_subquery)) # 🔥 핵심: 차단한 사람 제외!
+        .where(User.id.notin_(reported_subquery)) # 🔥 핵심: 신고한 사람 제외!
         .order_by(desc("score"))     # 점수순 정렬
         .limit(limit)
     )

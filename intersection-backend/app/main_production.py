@@ -1,0 +1,70 @@
+import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from .db import create_db_and_tables
+
+# 라우터 모듈 불러오기
+from .routers import auth as auth_router
+from .routers import users as users_router
+from .routers import posts as posts_router
+from .routers import comments as comments_router
+from .routers import friends as friends_router
+from .routers import common as common_router
+from .routers import chat as chat_router
+from .routers import moderation as moderation_router
+
+app = FastAPI(title="Intersection Backend")
+
+# ✅ CORS 설정 (환경별 다르게 설정)
+ENV = os.getenv("ENV", "development")  # 환경 변수로 development/production 구분
+
+if ENV == "production":
+    # 🔒 프로덕션: 특정 도메인만 허용
+    ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,  # 예: ["https://yourdomain.com", "https://www.yourdomain.com"]
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # 🔓 개발 환경: 모든 출처 허용
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# 이미지 업로드 폴더 설정
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# 정적 파일 서빙
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+
+@app.on_event("startup")
+def on_startup():
+    # DB 테이블 생성
+    create_db_and_tables()
+
+
+# 라우터 등록
+app.include_router(auth_router.router)
+app.include_router(users_router.router)
+app.include_router(posts_router.router)
+app.include_router(comments_router.router)
+app.include_router(friends_router.router)
+app.include_router(common_router.router)
+app.include_router(chat_router.router)
+app.include_router(moderation_router.router)
+
+
+@app.get("/")
+def root():
+    return {"message": "Intersection backend running", "env": ENV}

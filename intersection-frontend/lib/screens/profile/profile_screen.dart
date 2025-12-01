@@ -1,14 +1,16 @@
 // lib/screens/profile/profile_screen.dart
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intersection/data/app_state.dart';
+import 'package:intersection/services/api_service.dart';
 import 'package:intersection/screens/profile/edit_profile_screen.dart';
 import 'package:intersection/screens/common/image_viewer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intersection/screens/auth/landing_screen.dart';
-
+import 'package:intersection/config/api_config.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +20,35 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  // ============================
+  // 프로필/배경 이미지 서버에 저장
+  // ============================
+  Future<void> _saveProfileImages() async {
+    final user = AppState.currentUser!;
+
+    try {
+      await ApiService.uploadProfileImages(
+        profileBytes: user.profileImageBytes,
+        backgroundBytes: user.backgroundImageBytes,
+        profilePath: user.profileImageUrl,
+        backgroundPath: user.backgroundImageUrl,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("프로필 저장 완료")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("저장 실패: $e")),
+      );
+    }
+  }
+
+  // ============================
+  // 이미지 선택 (프로필/배경 공통)
+  // ============================
   Future<void> _pickImage({required bool isProfile}) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
@@ -30,12 +61,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() {
       if (kIsWeb) {
+        // 웹은 bytes로
         if (isProfile) {
           user.profileImageBytes = file.bytes;
         } else {
           user.backgroundImageBytes = file.bytes;
         }
       } else {
+        // 앱은 로컬 파일 경로로
         if (isProfile) {
           user.profileImageUrl = file.path;
         } else {
@@ -43,14 +76,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
     });
+
+    AppState.updateProfile();
   }
 
-  ImageProvider _provider(String? url, Uint8List? bytes) {
-    if (bytes != null) return MemoryImage(bytes);
-    if (url != null && url.startsWith("http")) return NetworkImage(url);
-    if (url != null && !kIsWeb && File(url).existsSync()) {
-      return FileImage(File(url));
+  // ============================
+  // 피드용 이미지 선택
+  // ============================
+  Future<void> _pickFeedImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+
+    if (result == null) return;
+
+    final file = result.files.first;
+    final user = AppState.currentUser!;
+
+    if (kIsWeb) {
+      // 웹은 data-url 형식으로 저장
+      if (file.bytes != null) {
+        final base64Str = base64Encode(file.bytes!);
+        final dataUrl = "data:image/png;base64,$base64Str";
+        user.profileFeedImages.add(dataUrl);
+      }
+    } else {
+      // 앱은 경로 그대로
+      if (file.path != null) {
+        user.profileFeedImages.add(file.path!);
+      }
     }
+
+    setState(() {});
+    AppState.updateProfile();
+  }
+
+  // ============================
+  // 공통 ImageProvider
+  //   - 웹: Network / Memory / Asset
+  //   - 앱: File / Network / Memory / Asset
+  // ============================
+  ImageProvider _provider(String? url, Uint8List? bytes) {
+    // 1) 메모리(웹/앱 공통)
+    if (bytes != null) return MemoryImage(bytes);
+
+    // 2) url 없으면 기본 이미지
+    if (url == null || url.isEmpty) {
+      return const AssetImage("assets/images/logo.png");
+    }
+
+    // 3) 이미 절대 URL 인 경우
+    if (url.startsWith("http")) {
+      return NetworkImage(url);
+    }
+
+    // 4) /uploads/... 같이 상대 경로인 경우 → 서버 절대 경로로
+    if (url.startsWith("/")) {
+      final absolute = "${ApiConfig.baseUrl}$url";
+      return NetworkImage(absolute);
+    }
+
+    // 5) 로컬 파일은 앱에서만
+    if (!kIsWeb) {
+      final f = File(url);
+      if (f.existsSync()) {
+        return FileImage(f);
+      }
+    }
+
+    // 6) 그래도 안 되면 기본 이미지
     return const AssetImage("assets/images/logo.png");
   }
 
@@ -59,25 +154,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = AppState.currentUser!;
     final width = MediaQuery.of(context).size.width;
 
-    final bgProvider = _provider(
-      user.backgroundImageUrl,
-      user.backgroundImageBytes,
-    );
-    final profileProvider = _provider(
-      user.profileImageUrl,
-      user.profileImageBytes,
-    );
+    final bgProvider =
+        _provider(user.backgroundImageUrl, user.backgroundImageBytes);
+    final profileProvider =
+        _provider(user.profileImageUrl, user.profileImageBytes);
 
     final hasProfileImage =
         user.profileImageUrl != null || user.profileImageBytes != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("내 프로필"),
-      ),
       body: SingleChildScrollView(
         child: Column(
           children: [
+            // =======================
+            // 헤더 + 배경 이미지
+            // =======================
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -100,8 +191,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     height: 190,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      image: user.backgroundImageUrl != null ||
-                              user.backgroundImageBytes != null
+                      image: (user.backgroundImageUrl != null ||
+                              user.backgroundImageBytes != null)
                           ? DecorationImage(
                               image: bgProvider,
                               fit: BoxFit.cover,
@@ -118,6 +209,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
+
+                // 배경 변경 버튼
                 Positioned(
                   right: 12,
                   bottom: 12,
@@ -131,6 +224,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: const Text("배경 변경"),
                   ),
                 ),
+
+                // 프로필 사진
                 Positioned(
                   bottom: -50,
                   left: (width / 2) - 50,
@@ -152,12 +247,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       tag: "my-profile-${user.id}",
                       child: CircleAvatar(
                         radius: 50,
-                        backgroundImage: hasProfileImage ? profileProvider : null,
+                        backgroundImage:
+                            hasProfileImage ? profileProvider : null,
                         backgroundColor: Colors.black,
                         child: hasProfileImage
                             ? null
-                            : const Icon(Icons.person,
-                                size: 60, color: Colors.white),
+                            : const Icon(
+                                Icons.person,
+                                size: 60,
+                                color: Colors.white,
+                              ),
                       ),
                     ),
                   ),
@@ -167,20 +266,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 70),
 
+            // 프로필 사진 변경
             TextButton.icon(
               onPressed: () => _pickImage(isProfile: true),
               icon: const Icon(Icons.camera_alt, size: 18),
-              label: const Text(
-                "프로필 사진 변경",
-                style: TextStyle(fontSize: 14),
-              ),
+              label: const Text("프로필 사진 변경"),
             ),
 
             const SizedBox(height: 20),
 
+            // 이름/정보
             Text(
               user.name,
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+              style:
+                  const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
@@ -190,23 +289,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 30),
 
+            // 피드 헤더
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  "피드",
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium!
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "피드",
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium!
+                        .copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  TextButton(
+                    onPressed: _pickFeedImage,
+                    child: const Text("사진 추가"),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 12),
 
-            if (user.feedImages.isEmpty)
+            // 피드 영역
+            if (user.profileFeedImages.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
                 child: Text(
@@ -218,15 +325,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 shrinkWrap: true,
-                itemCount: user.feedImages.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                itemCount: user.profileFeedImages.length,
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
                   mainAxisSpacing: 4,
                   crossAxisSpacing: 4,
                 ),
                 itemBuilder: (context, index) {
-                  final img = user.feedImages[index];
-
+                  final img = user.profileFeedImages[index];
                   return GestureDetector(
                     onTap: () {
                       Navigator.push(
@@ -252,6 +359,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 40),
 
+            // 정보 + 버튼들
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
@@ -259,19 +367,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const Divider(),
                   const SizedBox(height: 20),
-
-                  Text("학교: ${user.school}",
-                      style: const TextStyle(fontSize: 16)),
+                  Text(
+                    "학교: ${user.school}",
+                    style: const TextStyle(fontSize: 16),
+                  ),
                   const SizedBox(height: 10),
-
-                  Text("지역: ${user.region}",
-                      style: const TextStyle(fontSize: 16)),
+                  Text(
+                    "지역: ${user.region}",
+                    style: const TextStyle(fontSize: 16),
+                  ),
                   const SizedBox(height: 10),
-
-                  Text("${user.birthYear}년생",
-                      style: const TextStyle(fontSize: 16)),
+                  Text(
+                    "${user.birthYear}년생",
+                    style: const TextStyle(fontSize: 16),
+                  ),
                   const SizedBox(height: 30),
 
+                  // 저장 버튼
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _saveProfileImages,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text(
+                        "저장",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // 프로필 수정
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
@@ -289,6 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 20),
 
+                  // 로그아웃
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -296,11 +430,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         backgroundColor: Colors.redAccent,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: () => _showLogoutConfirmDialog(context),
+                      onPressed: () =>
+                          _showLogoutConfirmDialog(context),
                       child: const Text(
                         "로그아웃",
                         style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -315,21 +452,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// 로그아웃 확인 다이얼로그
   void _showLogoutConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
-      barrierDismissible: false, // 바깥 영역 클릭해도 닫히지 않음
+      barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          contentPadding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
+          contentPadding:
+              const EdgeInsets.fromLTRB(24, 30, 24, 20),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 아이콘
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -343,7 +479,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              // 메시지
               const Text(
                 '정말 로그아웃 하시겠습니까?',
                 textAlign: TextAlign.center,
@@ -357,66 +492,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           actions: [
-            // 취소 버튼
             Expanded(
               child: TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.grey.shade300, width: 1),
-                  ),
-                ),
-                child: const Text(
-                  '취소',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black54,
-                  ),
-                ),
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(),
+                child: const Text("취소"),
               ),
             ),
-            const SizedBox(width: 12),
-            // 로그아웃 버튼
             Expanded(
               child: ElevatedButton(
                 onPressed: () async {
-                  // 1. 다이얼로그 닫기
                   Navigator.of(dialogContext).pop();
-
-                  // 2. 로그아웃 실행 (메모리 + 로컬 저장소 초기화)
                   await AppState.logout();
-
-                  // 3. 로그인 화면으로 이동
                   if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (_) => const LandingScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const LandingScreen(),
+                    ),
                     (route) => false,
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  '로그아웃',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: const Text("로그아웃"),
               ),
             ),
           ],
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         );
       },
     );

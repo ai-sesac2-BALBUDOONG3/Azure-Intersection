@@ -28,3 +28,9 @@ coverage.xml
 # OS
 .DS_Store
 Thumbs.db
+
+# intersection-backend/.gitignore
+
+# 업로드된 파일 제외 (폴더는 유지하고 내용물만 무시)
+uploads/*
+!uploads/.gitkeep

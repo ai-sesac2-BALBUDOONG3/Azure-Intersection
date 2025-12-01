@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
+from sqlalchemy import or_
 from typing import List
 
-from ..models import ChatRoom, ChatMessage, User, get_kst_now
+from ..models import ChatRoom, ChatMessage, User, UserReport, UserBlock, get_kst_now
 from ..schemas import ChatRoomCreate, ChatRoomRead, ChatMessageCreate, ChatMessageRead
 from ..db import engine
 from ..auth import decode_access_token
@@ -62,10 +63,39 @@ def create_or_get_chat_room(
         if current_user_id == friend_id:
             raise HTTPException(status_code=400, detail="Cannot chat with yourself")
         
+        # ========================================
+        # ✅ 신고/차단 확인 (양방향)
+        # ========================================
+        # 1. 차단 확인
+        block_statement = select(UserBlock).where(
+            or_(
+                (UserBlock.user_id == current_user_id) & (UserBlock.blocked_user_id == friend_id),
+                (UserBlock.user_id == friend_id) & (UserBlock.blocked_user_id == current_user_id)
+            )
+        )
+        is_blocked = session.exec(block_statement).first()
+        if is_blocked:
+            raise HTTPException(status_code=403, detail="차단된 사용자와는 채팅할 수 없습니다")
+        
+        # 2. 신고 확인
+        report_statement = select(UserReport).where(
+            or_(
+                (UserReport.reporter_id == current_user_id) & (UserReport.reported_user_id == friend_id),
+                (UserReport.reporter_id == friend_id) & (UserReport.reported_user_id == current_user_id)
+            )
+        )
+        is_reported = session.exec(report_statement).first()
+        if is_reported:
+            raise HTTPException(status_code=403, detail="신고된 사용자와는 채팅할 수 없습니다")
+        
+        # ========================================
+        
         # 기존 채팅방 확인 (user1_id와 user2_id 순서 무관)
         statement = select(ChatRoom).where(
-            ((ChatRoom.user1_id == current_user_id) & (ChatRoom.user2_id == friend_id)) |
-            ((ChatRoom.user1_id == friend_id) & (ChatRoom.user2_id == current_user_id))
+            or_(
+                (ChatRoom.user1_id == current_user_id) & (ChatRoom.user2_id == friend_id),
+                (ChatRoom.user1_id == friend_id) & (ChatRoom.user2_id == current_user_id)
+            )
         )
         existing_room = session.exec(statement).first()
         
@@ -84,6 +114,7 @@ def create_or_get_chat_room(
         # 상대방 정보 조회
         friend = session.get(User, friend_id)
         friend_name = friend.name if friend else "Unknown"
+        friend_profile_image = friend.profile_image if friend else None  # ✅ 프로필 이미지 추가
         
         # 마지막 메시지 조회
         last_msg_statement = select(ChatMessage).where(
@@ -99,6 +130,44 @@ def create_or_get_chat_room(
         )
         unread_count = len(session.exec(unread_statement).all())
         
+        # ========================================
+        # ✅ 신고/차단 상태 확인 (통합)
+        # ========================================
+        # 1. 내가 상대방을 신고/차단했는지 (i_reported_them = i_blocked_them)
+        i_reported_statement = select(UserReport).where(
+            UserReport.reporter_id == current_user_id,
+            UserReport.reported_user_id == friend_id
+        )
+        i_reported_them = session.exec(i_reported_statement).first() is not None
+        
+        i_blocked_statement = select(UserBlock).where(
+            UserBlock.user_id == current_user_id,
+            UserBlock.blocked_user_id == friend_id
+        )
+        i_blocked_them = session.exec(i_blocked_statement).first() is not None
+        
+        # 신고 또는 차단 중 하나라도 했으면 True
+        i_reported_or_blocked = i_reported_them or i_blocked_them
+        
+        # 2. 상대방이 나를 신고/차단했는지 (they_blocked_me = they_reported_me)
+        they_reported_statement = select(UserReport).where(
+            UserReport.reporter_id == friend_id,
+            UserReport.reported_user_id == current_user_id
+        )
+        they_reported_me = session.exec(they_reported_statement).first() is not None
+        
+        they_blocked_statement = select(UserBlock).where(
+            UserBlock.user_id == friend_id,
+            UserBlock.blocked_user_id == current_user_id
+        )
+        they_blocked_me_real = session.exec(they_blocked_statement).first() is not None
+        
+        # 신고 또는 차단 중 하나라도 당했으면 True
+        they_blocked_or_reported = they_reported_me or they_blocked_me_real
+        
+        # ✅ 상대방이 채팅방을 나갔는지 확인
+        they_left = (room.left_user_id == friend_id)
+        
         return ChatRoomRead(
             id=room.id,
             user1_id=room.user1_id,
@@ -108,7 +177,18 @@ def create_or_get_chat_room(
             last_message=last_message.content if last_message else None,
             last_message_time=last_message.created_at.isoformat() if last_message else None,
             unread_count=unread_count,
-            created_at=room.created_at.isoformat()
+            created_at=room.created_at.isoformat(),
+            # ✅ 마지막 메시지 상세 정보 추가
+            last_message_type=last_message.message_type if last_message else None,
+            last_file_url=last_message.file_url if last_message else None,
+            last_file_name=last_message.file_name if last_message else None,
+            # ✅ 친구 프로필 이미지 추가
+            friend_profile_image=friend_profile_image,
+            # ✅ 신고/차단 상태 추가 (통합)
+            i_reported_them=i_reported_or_blocked,
+            they_blocked_me=they_blocked_or_reported,
+            # ✅ 채팅방 나가기 상태 추가
+            they_left=they_left
         )
 
 
@@ -121,9 +201,17 @@ def get_my_chat_rooms(current_user_id: int = Depends(get_current_user_id)):
     내가 참여한 모든 채팅방 목록을 반환합니다.
     """
     with Session(engine) as session:
-        # 내가 user1 또는 user2인 채팅방 조회
+        # 내가 user1 또는 user2인 채팅방 조회 (나간 채팅방 제외)
         statement = select(ChatRoom).where(
-            (ChatRoom.user1_id == current_user_id) | (ChatRoom.user2_id == current_user_id)
+            or_(
+                ChatRoom.user1_id == current_user_id,
+                ChatRoom.user2_id == current_user_id
+            )
+        ).where(
+            or_(
+                ChatRoom.left_user_id != current_user_id,
+                ChatRoom.left_user_id == None
+            )
         ).order_by(ChatRoom.updated_at.desc())
         
         rooms = session.exec(statement).all()
@@ -134,12 +222,17 @@ def get_my_chat_rooms(current_user_id: int = Depends(get_current_user_id)):
             friend_id = room.user2_id if room.user1_id == current_user_id else room.user1_id
             friend = session.get(User, friend_id)
             friend_name = friend.name if friend else "Unknown"
+            friend_profile_image = friend.profile_image if friend else None  # ✅ 프로필 이미지 추가
             
             # 마지막 메시지 조회
             last_msg_statement = select(ChatMessage).where(
                 ChatMessage.room_id == room.id
             ).order_by(ChatMessage.created_at.desc()).limit(1)
             last_message = session.exec(last_msg_statement).first()
+            
+            # ✅ 메시지가 없는 채팅방은 목록에서 제외
+            if not last_message:
+                continue
             
             # 읽지 않은 메시지 수
             unread_statement = select(ChatMessage).where(
@@ -148,6 +241,42 @@ def get_my_chat_rooms(current_user_id: int = Depends(get_current_user_id)):
                 ChatMessage.is_read == False
             )
             unread_count = len(session.exec(unread_statement).all())
+            
+            # ========================================
+            # ✅ 신고/차단 상태 확인 (통합)
+            # ========================================
+            # 1. 내가 상대방을 신고/차단했는지
+            i_reported_statement = select(UserReport).where(
+                UserReport.reporter_id == current_user_id,
+                UserReport.reported_user_id == friend_id
+            )
+            i_reported_them = session.exec(i_reported_statement).first() is not None
+            
+            i_blocked_statement = select(UserBlock).where(
+                UserBlock.user_id == current_user_id,
+                UserBlock.blocked_user_id == friend_id
+            )
+            i_blocked_them = session.exec(i_blocked_statement).first() is not None
+            
+            i_reported_or_blocked = i_reported_them or i_blocked_them
+            
+            # 2. 상대방이 나를 신고/차단했는지
+            they_reported_statement = select(UserReport).where(
+                UserReport.reporter_id == friend_id,
+                UserReport.reported_user_id == current_user_id
+            )
+            they_reported_me = session.exec(they_reported_statement).first() is not None
+            
+            they_blocked_statement = select(UserBlock).where(
+                UserBlock.user_id == friend_id,
+                UserBlock.blocked_user_id == current_user_id
+            )
+            they_blocked_me_real = session.exec(they_blocked_statement).first() is not None
+            
+            they_blocked_or_reported = they_reported_me or they_blocked_me_real
+            
+            # ✅ 상대방이 채팅방을 나갔는지 확인
+            they_left = (room.left_user_id == friend_id)
             
             result.append(ChatRoomRead(
                 id=room.id,
@@ -158,7 +287,18 @@ def get_my_chat_rooms(current_user_id: int = Depends(get_current_user_id)):
                 last_message=last_message.content if last_message else None,
                 last_message_time=last_message.created_at.isoformat() if last_message else None,
                 unread_count=unread_count,
-                created_at=room.created_at.isoformat()
+                created_at=room.created_at.isoformat(),
+                # ✅ 마지막 메시지 상세 정보 추가
+                last_message_type=last_message.message_type if last_message else None,
+                last_file_url=last_message.file_url if last_message else None,
+                last_file_name=last_message.file_name if last_message else None,
+                # ✅ 친구 프로필 이미지 추가
+                friend_profile_image=friend_profile_image,
+                # ✅ 신고/차단 상태 추가 (통합)
+                i_reported_them=i_reported_or_blocked,
+                they_blocked_me=they_blocked_or_reported,
+                # ✅ 채팅방 나가기 상태 추가
+                they_left=they_left
             ))
         
         return result
@@ -198,21 +338,28 @@ def get_chat_messages(
         
         session.commit()
         
+        # ✅ 파일 정보 포함하여 반환
         return [
             ChatMessageRead(
                 id=msg.id,
                 room_id=msg.room_id,
                 sender_id=msg.sender_id,
                 content=msg.content,
+                message_type=msg.message_type,
                 is_read=msg.is_read,
-                created_at=msg.created_at.isoformat()
+                created_at=msg.created_at.isoformat(),
+                # ✅ 파일 정보 추가
+                file_url=msg.file_url,
+                file_name=msg.file_name,
+                file_size=msg.file_size,
+                file_type=msg.file_type
             )
             for msg in messages
         ]
 
 
 # ------------------------------------------------------
-# 4. 메시지 전송 (REST API)
+# 4. 메시지 전송 (REST API) - ✅ 파일 업로드 지원
 # ------------------------------------------------------
 @router.post("/rooms/{room_id}/messages", response_model=ChatMessageRead)
 def send_chat_message(
@@ -222,6 +369,7 @@ def send_chat_message(
 ):
     """
     채팅방에 메시지를 전송합니다.
+    파일 업로드 지원 - file_url이 있으면 파일 메시지로 전송
     """
     with Session(engine) as session:
         # 채팅방 권한 확인
@@ -232,11 +380,89 @@ def send_chat_message(
         if room.user1_id != current_user_id and room.user2_id != current_user_id:
             raise HTTPException(status_code=403, detail="Not authorized")
         
+        # 나간 채팅방인지 확인
+        if room.left_user_id is not None and room.left_user_id == current_user_id:
+            raise HTTPException(status_code=403, detail="나간 채팅방에서는 메시지를 보낼 수 없습니다")
+        
+        # ========================================
+        # ✅ 신고/차단 확인 (양방향)
+        # ========================================
+        friend_id = room.user2_id if room.user1_id == current_user_id else room.user1_id
+        
+        # 1. 차단 확인 (양방향)
+        block_statement = select(UserBlock).where(
+            or_(
+                (UserBlock.user_id == current_user_id) & (UserBlock.blocked_user_id == friend_id),
+                (UserBlock.user_id == friend_id) & (UserBlock.blocked_user_id == current_user_id)
+            )
+        )
+        is_blocked = session.exec(block_statement).first()
+        if is_blocked:
+            raise HTTPException(status_code=403, detail="차단된 사용자와는 채팅할 수 없습니다")
+        
+        # 2. 신고 확인 (양방향)
+        report_statement = select(UserReport).where(
+            or_(
+                (UserReport.reporter_id == current_user_id) & (UserReport.reported_user_id == friend_id),
+                (UserReport.reporter_id == friend_id) & (UserReport.reported_user_id == current_user_id)
+            )
+        )
+        is_reported = session.exec(report_statement).first()
+        if is_reported:
+            raise HTTPException(status_code=403, detail="신고된 사용자와는 채팅할 수 없습니다")
+        
+        # ========================================
+        # ✅ message_type 자동 설정 (개선)
+        # ========================================
+        message_type = "normal"
+        
+        if data.file_url:
+            # 1. file_type으로 확인 (가장 정확)
+            if data.file_type:
+                file_type_lower = data.file_type.lower()
+                if ('image' in file_type_lower or 
+                    'png' in file_type_lower or 
+                    'jpg' in file_type_lower or 
+                    'jpeg' in file_type_lower or
+                    'gif' in file_type_lower or
+                    'webp' in file_type_lower):
+                    message_type = "image"
+                else:
+                    message_type = "file"
+            # 2. file_name으로 확인 (file_type이 없을 경우)
+            elif data.file_name:
+                file_name_lower = data.file_name.lower()
+                if (file_name_lower.endswith('.png') or 
+                    file_name_lower.endswith('.jpg') or 
+                    file_name_lower.endswith('.jpeg') or
+                    file_name_lower.endswith('.gif') or
+                    file_name_lower.endswith('.webp')):
+                    message_type = "image"
+                else:
+                    message_type = "file"
+            # 3. file_url로 확인 (최후 수단)
+            else:
+                file_url_lower = data.file_url.lower()
+                if (file_url_lower.endswith('.png') or 
+                    file_url_lower.endswith('.jpg') or 
+                    file_url_lower.endswith('.jpeg') or
+                    file_url_lower.endswith('.gif') or
+                    file_url_lower.endswith('.webp')):
+                    message_type = "image"
+                else:
+                    message_type = "file"
+        
         # 메시지 생성
         message = ChatMessage(
             room_id=room_id,
             sender_id=current_user_id,
-            content=data.content
+            content=data.content,
+            message_type=message_type,
+            # ✅ 파일 정보 저장
+            file_url=data.file_url,
+            file_name=data.file_name,
+            file_size=data.file_size,
+            file_type=data.file_type
         )
         session.add(message)
         
@@ -251,17 +477,23 @@ def send_chat_message(
             room_id=message.room_id,
             sender_id=message.sender_id,
             content=message.content,
+            message_type=message.message_type,
             is_read=message.is_read,
-            created_at=message.created_at.isoformat()
+            created_at=message.created_at.isoformat(),
+            # ✅ 파일 정보 반환
+            file_url=message.file_url,
+            file_name=message.file_name,
+            file_size=message.file_size,
+            file_type=message.file_type
         )
 
 
 @router.delete("/rooms/{room_id}")
-def delete_chat_room(
+def leave_chat_room(
     room_id: int,
     current_user_id: int = Depends(get_current_user_id)
 ):
-    """채팅방 나가기 (삭제)"""
+    """채팅방 나가기 (나간 사용자만 제외, 상대방에게 시스템 메시지 전송)"""
     with Session(engine) as session:
         room = session.get(ChatRoom, room_id)
         if not room:
@@ -271,17 +503,50 @@ def delete_chat_room(
         if current_user_id != room.user1_id and current_user_id != room.user2_id:
             raise HTTPException(status_code=403, detail="이 채팅방의 참여자가 아닙니다")
         
-        # 채팅방과 관련된 모든 메시지 삭제
-        messages_statement = select(ChatMessage).where(ChatMessage.room_id == room_id)
-        messages = session.exec(messages_statement).all()
-        for message in messages:
-            session.delete(message)
+        # 이미 나간 채팅방인지 확인
+        if room.left_user_id == current_user_id:
+            raise HTTPException(status_code=400, detail="이미 나간 채팅방입니다")
         
-        # 채팅방 삭제
-        session.delete(room)
+        # ✅ 상대방이 이미 나갔는지 확인
+        friend_id = room.user2_id if room.user1_id == current_user_id else room.user1_id
+        other_user_already_left = (room.left_user_id == friend_id)
+        
+        # ✅ 양쪽 다 나간 경우: 채팅방과 메시지 모두 삭제
+        if other_user_already_left:
+            # 1. 채팅방의 모든 메시지 삭제
+            delete_messages_statement = select(ChatMessage).where(
+                ChatMessage.room_id == room_id
+            )
+            messages = session.exec(delete_messages_statement).all()
+            for msg in messages:
+                session.delete(msg)
+            
+            # 2. 채팅방 삭제
+            session.delete(room)
+            session.commit()
+            
+            return {"message": "채팅방을 나갔습니다. 대화 내용이 삭제되었습니다."}
+        
+        # ✅ 한쪽만 나간 경우: left_user_id 업데이트
+        room.left_user_id = current_user_id
+        session.add(room)
+        
+        # 상대방에게 시스템 메시지 전송
+        system_message = ChatMessage(
+            room_id=room_id,
+            sender_id=current_user_id,
+            content="상대방이 채팅방을 나갔습니다.",
+            message_type="system",
+            is_read=False
+        )
+        session.add(system_message)
+        
+        # 채팅방 업데이트 시간 갱신
+        room.updated_at = get_kst_now()
+        
         session.commit()
         
-        return {"message": "채팅방이 삭제되었습니다"}
+        return {"message": "채팅방을 나갔습니다"}
 
 
 # ------------------------------------------------------
@@ -364,4 +629,3 @@ async def websocket_chat(websocket: WebSocket, room_id: int, token: str):
     
     except WebSocketDisconnect:
         manager.disconnect(user_id)
-

@@ -1,13 +1,17 @@
-// intersection-frontend/lib/services/api_service.dart
+// lib/services/api_service.dart
 
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
-import '../models/user.dart';
-import '../models/chat_room.dart';
-import '../models/chat_message.dart';
 import '../data/app_state.dart';
+import '../models/chat_message.dart';
+import '../models/chat_room.dart';
+import '../models/user.dart';
 
 class ApiService {
   // ----------------------------------------------------
@@ -16,170 +20,181 @@ class ApiService {
   static Map<String, String> _headers({bool json = true}) {
     final token = AppState.token;
     return {
-      if (json) 'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (json) "Content-Type": "application/json",
+      if (token != null) "Authorization": "Bearer $token",
     };
   }
 
   // ----------------------------------------------------
-  // 공통 URL 빌더 (baseUrl + path 정리)
-  // ----------------------------------------------------
-  static Uri _buildUri(String path) {
-    final base = ApiConfig.baseUrl;
-    final normalizedBase =
-        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
-    final normalizedPath = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$normalizedBase$normalizedPath');
-  }
-
-  // 공통 에러 헬퍼
-  static Never _throwHttpError(
-      String label, http.Response response, String path) {
-    throw Exception(
-      '$label 실패 '
-      '(status: ${response.statusCode}, path: $path, body: ${response.body})',
-    );
-  }
-
-  // ----------------------------------------------------
-  // 1) 회원가입
+  // 회원가입
   // ----------------------------------------------------
   static Future<Map<String, dynamic>> signup(
       Map<String, dynamic> data) async {
-    const path = '/users/';
-    final url = _buildUri(path);
-
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/");
     final response = await http.post(
       url,
-      headers: _headers(),
+      headers: {"Content-Type": "application/json"},
       body: jsonEncode(data),
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      return jsonDecode(response.body);
     } else {
-      _throwHttpError('회원가입', response, path);
+      throw Exception("회원가입 실패: ${response.body}");
     }
   }
 
   // ----------------------------------------------------
-  // 2) 로그인 (JSON 방식)
+  // 로그인
   // ----------------------------------------------------
   static Future<String> login(String email, String password) async {
-    const path = '/token';
-    final url = _buildUri(path);
+    final url = Uri.parse("${ApiConfig.baseUrl}/token");
 
     final response = await http.post(
       url,
-      headers: _headers(),
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-      }),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"email": email, "password": password}),
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['access_token'] as String;
+      final data = jsonDecode(response.body);
+      return data["access_token"];
     } else {
-      _throwHttpError('로그인', response, path);
+      throw Exception("로그인 실패: ${response.body}");
     }
   }
 
   // ----------------------------------------------------
-  // 3) 내 정보 가져오기
+  // 내 정보 가져오기
   // ----------------------------------------------------
   static Future<User> getMyInfo() async {
-    const path = '/users/me';
-    final url = _buildUri(path);
-
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me");
     final response = await http.get(url, headers: _headers(json: false));
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(response.body);
+
       return User(
-        id: data['id'] as int,
-        name: data['name'] ?? '',
-        birthYear: data['birth_year'] ?? 0,
-        region: data['region'] ?? '',
-        school: data['school_name'] ?? '',
+        id: data["id"],
+        name: data["name"] ?? "",
+        birthYear: data["birth_year"] ?? 0,
+        region: data["region"] ?? "",
+        school: data["school_name"] ?? "",
+        profileImageUrl: data["profile_image"],
+        backgroundImageUrl: data["background_image"],
+        profileFeedImages: (data["feed_images"] != null)
+            ? List<String>.from(data["feed_images"])
+            : [],
       );
     } else {
-      _throwHttpError('내 정보 불러오기', response, path);
+      throw Exception("내 정보 불러오기 실패: ${response.body}");
     }
   }
 
   // ----------------------------------------------------
-  // 4) 내 정보 업데이트
+  // 내 정보 업데이트
   // ----------------------------------------------------
   static Future<Map<String, dynamic>> updateMyInfo(
       Map<String, dynamic> data) async {
-    const path = '/users/me';
-    final url = _buildUri(path);
+    final url = Uri.parse('${ApiConfig.baseUrl}/users/me');
+
+    final body = <String, dynamic>{
+      if (data["name"] != null) "name": data["name"],
+      if (data["nickname"] != null) "nickname": data["nickname"],
+      if (data["birth_year"] != null) "birth_year": data["birth_year"],
+      if (data["gender"] != null) "gender": data["gender"],
+      if (data["region"] != null) "region": data["region"],
+      if (data["school_name"] != null) "school_name": data["school_name"],
+      if (data["school_type"] != null) "school_type": data["school_type"],
+      if (data["admission_year"] != null)
+        "admission_year": data["admission_year"],
+      if (data["profile_image"] != null) "profile_image": data["profile_image"],
+      if (data["background_image"] != null)
+        "background_image": data["background_image"],
+    };
 
     final response = await http.put(
       url,
       headers: _headers(),
-      body: jsonEncode(data),
+      body: jsonEncode(body),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } else {
-      _throwHttpError('내 정보 업데이트', response, path);
+      return jsonDecode(response.body);
     }
+
+    throw Exception('내 정보 업데이트 실패: ${response.body}');
   }
 
   // ----------------------------------------------------
-  // Kakao dev login (dev-only helper)
-  // ----------------------------------------------------
-  static Future<String> kakaoDevLogin() async {
-    const path = '/auth/kakao/dev_token';
-    final url = _buildUri(path);
-
-    final response = await http.get(url, headers: _headers(json: false));
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['access_token'] as String;
-    } else {
-      _throwHttpError('Kakao dev login', response, path);
-    }
-  }
-
-  // ----------------------------------------------------
-  // 5) 추천 친구 목록
+  // 추천 친구
   // ----------------------------------------------------
   static Future<List<User>> getRecommendedFriends() async {
-    const path = '/users/me/recommended';
-    final url = _buildUri(path);
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me/recommended");
 
-    final response = await http.get(url, headers: _headers(json: false));
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
+      final list = jsonDecode(response.body) as List;
 
-      return list.map((raw) {
-        final data = raw as Map<String, dynamic>;
-        return User(
-          id: data['id'] as int,
-          name: data['name'] ?? '',
-          birthYear: data['birth_year'] ?? 0,
-          region: data['region'] ?? '',
-          school: data['school_name'] ?? '',
-        );
-      }).toList();
+      return list
+          .map(
+            (data) => User(
+              id: data["id"],
+              name: data["name"],
+              birthYear: data["birth_year"],
+              region: data["region"],
+              school: data["school_name"],
+              profileImageUrl: data["profile_image"],
+              backgroundImageUrl: data["background_image"],
+            ),
+          )
+          .toList();
     } else {
-      _throwHttpError('추천 친구 불러오기', response, path);
+      throw Exception("추천 친구 불러오기 실패: ${response.body}");
     }
   }
 
   // ----------------------------------------------------
-  // 6) 친구 추가 / 목록
+  // 친구 목록
   // ----------------------------------------------------
-  static Future<bool> addFriend(int targetUserId) async {
-    final path = '/friends/$targetUserId';
-    final url = _buildUri(path);
+  static Future<List<User>> getFriends() async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/friends/me");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final list = jsonDecode(response.body) as List;
+
+      return list
+          .map(
+            (data) => User(
+              id: data["id"],
+              name: data["name"],
+              birthYear: data["birth_year"],
+              region: data["region"],
+              school: data["school_name"],
+              profileImageUrl: data["profile_image"],
+              backgroundImageUrl: data["background_image"],
+            ),
+          )
+          .toList();
+    } else {
+      throw Exception("친구 목록 불러오기 실패: ${response.body}");
+    }
+  }
+
+  // ----------------------------------------------------
+  // 친구 추가
+  // ----------------------------------------------------
+  static Future<bool> addFriend(int userId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/friends/$userId");
 
     final response = await http.post(
       url,
@@ -189,189 +204,345 @@ class ApiService {
     return response.statusCode == 200;
   }
 
-  static Future<List<User>> getFriends() async {
-    const path = '/friends/me';
-    final url = _buildUri(path);
-
-    final response = await http.get(url, headers: _headers(json: false));
-
-    if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
-
-      return list.map((raw) {
-        final data = raw as Map<String, dynamic>;
-        return User(
-          id: data['id'] as int,
-          name: data['name'] ?? '',
-          birthYear: data['birth_year'] ?? 0,
-          region: data['region'] ?? '',
-          school: data['school_name'] ?? '',
-        );
-      }).toList();
-    } else {
-      _throwHttpError('친구 목록 불러오기', response, path);
-    }
-  }
-
   // ----------------------------------------------------
-  // Posts / Comments
+  // 게시글 / 댓글
   // ----------------------------------------------------
   static Future<Map<String, dynamic>> createPost(String content) async {
-    const path = '/users/me/posts/';
-    final url = _buildUri(path);
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me/posts/");
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({"content": content}),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    }
+
+    throw Exception("게시글 작성 실패: ${response.body}");
+  }
+
+  static Future<Map<String, dynamic>> createPostWithMedia({
+    required String content,
+    List<String> mediaUrls = const [],
+  }) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me/posts/");
+
+    final body = <String, dynamic>{
+      "content": content,
+      if (mediaUrls.isNotEmpty) "image_url": mediaUrls.first,
+    };
 
     final response = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode({'content': content}),
+      body: jsonEncode(body),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } else {
-      _throwHttpError('게시글 작성', response, path);
+      return jsonDecode(response.body);
     }
+
+    throw Exception("게시글 작성 실패: ${response.body}");
   }
 
   static Future<List<Map<String, dynamic>>> listPosts() async {
-    const path = '/posts/';
-    final url = _buildUri(path);
-
-    final response = await http.get(url, headers: _headers(json: false));
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/");
+    final response = await http.get(url, headers: _headers());
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
-      return List<Map<String, dynamic>>.from(list);
-    } else {
-      _throwHttpError('게시물 목록 불러오기', response, path);
+      final list = jsonDecode(response.body) as List;
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
     }
+
+    throw Exception("게시물 목록 불러오기 실패: ${response.body}");
   }
 
   static Future<Map<String, dynamic>> createComment(
       int postId, String content) async {
-    final path = '/posts/$postId/comments';
-    final url = _buildUri(path);
-
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/comments");
     final response = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode({'content': content}),
+      body: jsonEncode({"content": content}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
-    } else {
-      _throwHttpError('댓글 작성', response, path);
+      return jsonDecode(response.body);
     }
+
+    throw Exception("댓글 작성 실패: ${response.body}");
   }
 
   static Future<List<Map<String, dynamic>>> listComments(int postId) async {
-    final path = '/posts/$postId/comments';
-    final url = _buildUri(path);
-
-    final response = await http.get(url, headers: _headers(json: false));
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/comments");
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
+      final list = jsonDecode(response.body) as List;
       return List<Map<String, dynamic>>.from(list);
-    } else {
-      _throwHttpError('댓글 목록 불러오기', response, path);
     }
+
+    throw Exception("댓글 목록 불러오기 실패: ${response.body}");
   }
 
   // ----------------------------------------------------
-  // 💬 채팅 API
+  // 게시물 신고
   // ----------------------------------------------------
-
-  /// 채팅방 생성 또는 가져오기
-  static Future<ChatRoom> createOrGetChatRoom(int friendId) async {
-    const path = '/chat/rooms';
-    final url = _buildUri(path);
+  static Future<bool> reportPost(int postId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/report-post");
 
     final response = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode({'friend_id': friendId}),
+      body: jsonEncode({
+        "post_id": postId,
+        "reason": "inappropriate",
+      }),
+    );
+
+    return response.statusCode == 200;
+  }
+
+  // ----------------------------------------------------
+  // ❤️ 게시물 좋아요 (프론트 전용: 서버 연동 전)
+  // ----------------------------------------------------
+  static Future<Map<String, dynamic>> togglePostLike(int postId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/like");
+    final response = await http.post(url, headers: _headers(json: false));
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    }
+    throw Exception("게시글 좋아요 실패: ${response.body}");
+  }
+
+  // ----------------------------------------------------
+  // ❤️ 게시물 좋아요 — 서버 토글 방식
+  // ----------------------------------------------------
+  static Future<Map<String, dynamic>> toggleLike(int postId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/like");
+
+    final response = await http.post(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        "liked": data["is_liked"],
+        "likes_count": data["like_count"],
+      };
+    }
+
+    throw Exception("좋아요 토글 실패: ${response.body}");
+  }
+
+
+
+  // ----------------------------------------------------
+  // ❤️ 댓글 좋아요
+  // ----------------------------------------------------
+  static Future<bool> likeComment(int commentId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/comments/$commentId/like");
+    final response = await http.post(url, headers: _headers(json: false));
+    return response.statusCode == 200;
+  }
+
+  static Future<bool> unlikeComment(int commentId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/comments/$commentId/like");
+    final response = await http.delete(url, headers: _headers(json: false));
+    return response.statusCode == 200;
+  }
+
+  // ----------------------------------------------------
+  // 💬 채팅
+  // ----------------------------------------------------
+  static Future<ChatRoom> createOrGetChatRoom(int friendId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms");
+
+    final response = await http.post(
+      url,
+      headers: _headers(),
+      body: jsonEncode({"friend_id": friendId}),
     );
 
     if (response.statusCode == 200) {
       return ChatRoom.fromJson(jsonDecode(response.body));
     } else {
-      _throwHttpError('채팅방 생성', response, path);
+      throw Exception("채팅방 생성 실패: ${response.body}");
     }
   }
 
-  /// 내 채팅방 목록 가져오기
   static Future<List<ChatRoom>> getMyChatRooms() async {
-    const path = '/chat/rooms';
-    final url = _buildUri(path);
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms");
 
-    final response = await http.get(url, headers: _headers(json: false));
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
+      final list = jsonDecode(response.body) as List;
       return list.map((json) => ChatRoom.fromJson(json)).toList();
     } else {
-      _throwHttpError('채팅방 목록 불러오기', response, path);
+      throw Exception("채팅방 목록 불러오기 실패: ${response.body}");
     }
   }
 
-  /// 채팅방의 메시지 목록 가져오기
   static Future<List<ChatMessage>> getChatMessages(int roomId) async {
-    final path = '/chat/rooms/$roomId/messages';
-    final url = _buildUri(path);
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages");
 
-    final response = await http.get(url, headers: _headers(json: false));
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
+      final list = jsonDecode(response.body) as List;
       return list.map((json) => ChatMessage.fromJson(json)).toList();
     } else {
-      _throwHttpError('메시지 불러오기', response, path);
+      throw Exception("메시지 불러오기 실패: ${response.body}");
     }
   }
 
-  /// 메시지 전송 (REST API 방식)
   static Future<ChatMessage> sendChatMessage(
-      int roomId, String content) async {
-    final path = '/chat/rooms/$roomId/messages';
-    final url = _buildUri(path);
+    int roomId,
+    String content, {
+    String? fileUrl,
+    String? fileName,
+    int? fileSize,
+    String? fileType,
+  }) async {
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages");
+
+    final body = {
+      "content": content,
+      if (fileUrl != null) "file_url": fileUrl,
+      if (fileName != null) "file_name": fileName,
+      if (fileSize != null) "file_size": fileSize,
+      if (fileType != null) "file_type": fileType,
+    };
 
     final response = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode({'content': content}),
+      body: jsonEncode(body),
     );
 
     if (response.statusCode == 200) {
       return ChatMessage.fromJson(jsonDecode(response.body));
     } else {
-      _throwHttpError('메시지 전송', response, path);
+      throw Exception("메시지 전송 실패: ${response.body}");
     }
   }
 
-  // ----------------------------------------------------
-  // 🚫 차단 & 신고 API
-  // ----------------------------------------------------
+  // ========================================
+  // 파일 업로드 (공용)
+  // ========================================
+  static Future<Map<String, dynamic>> uploadFile(File file) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/upload");
 
-  /// 사용자 차단
+    var request = http.MultipartRequest('POST', url);
+
+    if (AppState.token != null) {
+      request.headers['Authorization'] = 'Bearer ${AppState.token}';
+    }
+
+    request.files.add(await http.MultipartFile.fromPath(
+      'file',
+      file.path,
+      filename: file.path.split('/').last,
+    ));
+
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      return jsonDecode(responseBody) as Map<String, dynamic>;
+    } else {
+      throw Exception("파일 업로드 실패: $responseBody");
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadBytes(
+      Uint8List bytes, String fileName) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/upload");
+
+    var request = http.MultipartRequest('POST', url);
+
+    if (AppState.token != null) {
+      request.headers['Authorization'] = 'Bearer ${AppState.token}';
+    }
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: fileName,
+    ));
+
+    final response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      return jsonDecode(responseBody) as Map<String, dynamic>;
+    } else {
+      throw Exception("파일 업로드 실패: $responseBody");
+    }
+  }
+
+  static Future<ChatMessage> sendImageMessage(
+      int roomId, File imageFile) async {
+    final uploadResult = await uploadFile(imageFile);
+
+    return await sendChatMessage(
+      roomId,
+      "[이미지]",
+      fileUrl: uploadResult['file_url'],
+      fileName: uploadResult['filename'],
+      fileSize: uploadResult['size'],
+      fileType: uploadResult['type'],
+    );
+  }
+
+  static Future<ChatMessage> sendFileMessage(int roomId, File file) async {
+    final uploadResult = await uploadFile(file);
+
+    final fileName = uploadResult['filename'];
+    return await sendChatMessage(
+      roomId,
+      "[파일] $fileName",
+      fileUrl: uploadResult['file_url'],
+      fileName: fileName,
+      fileSize: uploadResult['size'],
+      fileType: uploadResult['type'],
+    );
+  }
+
+  // ----------------------------------------------------
+  // 신고/차단
+  // ----------------------------------------------------
   static Future<bool> blockUser(int userId) async {
-    const path = '/moderation/block';
-    final url = _buildUri(path);
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/block");
 
     final response = await http.post(
       url,
       headers: _headers(),
-      body: jsonEncode({'blocked_user_id': userId}),
+      body: jsonEncode({"blocked_user_id": userId}),
     );
 
     return response.statusCode == 200;
   }
 
-  /// 사용자 차단 해제
   static Future<bool> unblockUser(int userId) async {
-    final path = '/moderation/block/$userId';
-    final url = _buildUri(path);
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/moderation/block/$userId");
 
     final response = await http.delete(
       url,
@@ -381,66 +552,48 @@ class ApiService {
     return response.statusCode == 200;
   }
 
-  /// 차단 목록 조회
-  static Future<List<int>> getBlockedUserIds() async {
-    const path = '/moderation/blocked';
-    final url = _buildUri(path);
-
-    final response = await http.get(url, headers: _headers(json: false));
-
-    if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
-      return list
-          .map((item) =>
-              (item as Map<String, dynamic>)['blocked_user_id'] as int)
-          .toList();
-    }
-    return [];
-  }
-
-  /// 차단 여부 확인 (양방향)
   static Future<Map<String, dynamic>> checkIfBlocked(int userId) async {
-    final path = '/moderation/is-blocked/$userId';
-    final url = _buildUri(path);
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/moderation/is-blocked/$userId");
 
-    final response = await http.get(url, headers: _headers(json: false));
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      return jsonDecode(response.body);
     }
     return {
-      'is_blocked': false,
-      'i_blocked_them': false,
-      'they_blocked_me': false,
+      "is_blocked": false,
+      "i_blocked_them": false,
+      "they_blocked_me": false,
     };
   }
 
-  /// 사용자 신고
   static Future<bool> reportUser({
     required int userId,
     required String reason,
     String? content,
   }) async {
-    const path = '/moderation/report';
-    final url = _buildUri(path);
+    final url = Uri.parse("${ApiConfig.baseUrl}/moderation/report");
 
     final response = await http.post(
       url,
       headers: _headers(),
       body: jsonEncode({
-        'reported_user_id': userId,
-        'reason': reason,
-        'content': content,
+        "reported_user_id": userId,
+        "reason": reason,
+        "content": content,
       }),
     );
 
     return response.statusCode == 200;
   }
 
-  /// 채팅방 삭제 (나가기)
   static Future<bool> deleteChatRoom(int roomId) async {
-    final path = '/chat/rooms/$roomId';
-    final url = _buildUri(path);
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId");
 
     final response = await http.delete(
       url,
@@ -450,23 +603,24 @@ class ApiService {
     return response.statusCode == 200;
   }
 
-  /// 내가 특정 사용자를 신고했는지 확인
   static Future<Map<String, dynamic>> checkMyReport(int userId) async {
-    final path = '/moderation/my-reports/$userId';
-    final url = _buildUri(path);
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/moderation/my-reports/$userId");
 
-    final response = await http.get(url, headers: _headers(json: false));
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      return jsonDecode(response.body);
     }
-    return {'has_reported': false};
+    return {"has_reported": false};
   }
 
-  /// 신고 취소
   static Future<bool> cancelReport(int reportId) async {
-    final path = '/moderation/report/$reportId';
-    final url = _buildUri(path);
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/moderation/report/$reportId");
 
     final response = await http.delete(
       url,
@@ -474,5 +628,125 @@ class ApiService {
     );
 
     return response.statusCode == 200;
+  }
+
+  // ----------------------------------------------------
+  // Web 업로드
+  // ----------------------------------------------------
+  static Future<ChatMessage> sendImageMessageWeb(
+      int roomId, Uint8List bytes, String fileName) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/upload");
+
+    var request = http.MultipartRequest('POST', url);
+    if (AppState.token != null) {
+      request.headers['Authorization'] = 'Bearer ${AppState.token}';
+    }
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: fileName,
+    ));
+
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+
+    if (response.statusCode != 200) {
+      throw Exception("업로드 실패: $body");
+    }
+
+    final uploadResult = jsonDecode(body);
+
+    return await sendChatMessage(
+      roomId,
+      "[이미지]",
+      fileUrl: uploadResult['file_url'],
+      fileName: uploadResult['filename'],
+      fileSize: uploadResult['size'],
+      fileType: uploadResult['type'],
+    );
+  }
+
+  static Future<ChatMessage> sendFileMessageWeb(
+      int roomId, Uint8List bytes, String fileName) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/upload");
+
+    var request = http.MultipartRequest('POST', url);
+    if (AppState.token != null) {
+      request.headers['Authorization'] = 'Bearer ${AppState.token}';
+    }
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'file',
+      bytes,
+      filename: fileName,
+    ));
+
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+
+    if (response.statusCode != 200) {
+      throw Exception("업로드 실패: $body");
+    }
+
+    final uploadResult = jsonDecode(body);
+
+    return await sendChatMessage(
+      roomId,
+      "[파일] $fileName",
+      fileUrl: uploadResult['file_url'],
+      fileName: fileName,
+      fileSize: uploadResult['size'],
+      fileType: uploadResult['type'],
+    );
+  }
+
+  // ========================================
+  // 🔥 프로필/배경 이미지 저장 (웹 안전 버전)
+  // ========================================
+  static Future<void> uploadProfileImages({
+    Uint8List? profileBytes,
+    Uint8List? backgroundBytes,
+    String? profilePath,
+    String? backgroundPath,
+  }) async {
+    String? profileUrl;
+    String? backgroundUrl;
+
+    final isWeb = kIsWeb;
+
+    // 프로필 업로드
+    if (profileBytes != null) {
+      final res = await uploadBytes(profileBytes, "profile.png");
+      profileUrl = res["file_url"];
+    } else if (!isWeb && profilePath != null) {
+      final f = File(profilePath);
+      if (f.existsSync()) {
+        final res = await uploadFile(f);
+        profileUrl = res["file_url"];
+      }
+    }
+
+    // 배경 업로드
+    if (backgroundBytes != null) {
+      final res = await uploadBytes(backgroundBytes, "background.png");
+      backgroundUrl = res["file_url"];
+    } else if (!isWeb && backgroundPath != null) {
+      final f = File(backgroundPath);
+      if (f.existsSync()) {
+        final res = await uploadFile(f);
+        backgroundUrl = res["file_url"];
+      }
+    }
+
+    // 서버에 URL 저장
+    final updateData = <String, dynamic>{};
+    if (profileUrl != null) updateData["profile_image"] = profileUrl;
+    if (backgroundUrl != null) updateData["background_image"] = backgroundUrl;
+
+    if (updateData.isNotEmpty) {
+      await updateMyInfo(updateData);
+      AppState.currentUser = await getMyInfo();
+    }
   }
 }
