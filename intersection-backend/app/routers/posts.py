@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from sqlmodel import Session, select, func
-# 👇 스키마 임포트 (PostReportCreate, PostReportRead 확인)
+# 👇 스키마 임포트
 from ..schemas import PostCreate, PostRead, PostReportCreate, PostReportRead
-# 👇 모델 임포트 (PostReport, Notification 등 확인)
-from ..models import Post, User, PostLike, PostReport, UserBlock, Notification
+# 👇 모델 임포트 (🔥 UserReport 추가됨)
+from ..models import Post, User, PostLike, PostReport, UserBlock, Notification, UserReport
 from ..db import engine
 from ..routers.users import get_current_user
 
@@ -53,7 +53,8 @@ def list_posts(
             blocked_by_stmt = select(UserBlock.user_id).where(UserBlock.blocked_user_id == current_user.id)
             blocked_by_ids = session.exec(blocked_by_stmt).all()
             
-            # 🔥 [추가] 2. 신고 관계 (내가 신고한 사람 - pending 상태)
+            # 2. 신고 관계 (내가 신고한 사람 - pending 상태)
+            # 🔥 여기서 UserReport 모델을 사용함
             reported_stmt = select(UserReport.reported_user_id).where(
                 UserReport.reporter_id == current_user.id,
                 UserReport.status == "pending"
@@ -195,10 +196,7 @@ def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
         # 🔥 [추가] 관련 좋아요 데이터 삭제 (FK 오류 방지)
         session.exec(select(PostLike).where(PostLike.post_id == post.id)).all()
         # 주의: SQLModel 관계 설정에서 cascade="all, delete"가 되어 있다면 이 과정은 생략 가능하나, 
-        # 명시적으로 지워주는 것이 안전합니다. 여기서는 수동 삭제 로직을 추가하지 않았으나
-        # 실제 DB 설정에 따라 session.delete(like) 반복문이 필요할 수 있습니다.
-        # 가장 깔끔한 건 models.py에서 Relationship(cascade_delete=True)를 쓰는 것입니다.
-        # 일단 여기서는 post 삭제만 진행합니다.
+        # 명시적으로 지워주는 것이 안전합니다.
             
         session.delete(post)
         session.commit()
