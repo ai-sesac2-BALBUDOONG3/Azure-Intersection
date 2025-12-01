@@ -1,26 +1,10 @@
 #!/bin/bash
 set -e
 
-# Azure Linux App Service에서 코드가 올라오는 기본 경로
-cd /home/site/wwwroot
+# Oryx가 이미 APP_PATH, PYTHONPATH, 가상환경(antenv)을 설정해둔 상태에서
+# 이 스크립트가 호출된다. 우리는 그냥 거기서 uvicorn만 실행하면 된다.
 
-echo "[startup] working dir: $(pwd)"
+echo "[startup] PWD: $(pwd)"
+echo "[startup] PYTHONPATH: $PYTHONPATH"
 
-# 1) venv 없으면 생성 + 패키지 설치
-if [ ! -d "antenv" ]; then
-  echo "[startup] create virtualenv 'antenv'"
-  python -m venv antenv
-  source antenv/bin/activate
-
-  echo "[startup] upgrade pip"
-  pip install --upgrade pip
-
-  echo "[startup] install requirements"
-  pip install -r requirements.txt
-else
-  echo "[startup] reuse existing virtualenv 'antenv'"
-  source antenv/bin/activate
-fi
-
-echo "[startup] launch uvicorn"
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
