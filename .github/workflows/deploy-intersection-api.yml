@@ -1,0 +1,36 @@
+name: Deploy Intersection API to Azure Web App
+
+on:
+  push:
+    branches:
+      - main          # main 브랜치에 push 될 때마다 자동 배포
+  workflow_dispatch:  # GitHub UI에서 수동으로도 실행 가능
+
+env:
+  AZURE_WEBAPP_NAME: intersection-api-balbudoong-main
+  AZURE_WEBAPP_PACKAGE_PATH: './intersection-backend'  # 백엔드 폴더 경로
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # (옵션) 나중에 테스트 추가용으로 Python 세팅 단계만 둠
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # 여기서는 실제 빌드/테스트는 안 하고,
+      # Azure 쪽 Oryx 빌드가 requirements.txt 를 보고 알아서 설치하도록 맡긴다.
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
