@@ -47,24 +47,26 @@ def get_content_based_scores(users: list[User], target_user: User) -> dict:
     [Scikit-Learn] 콘텐츠 기반 필터링 (Content-Based Filtering)
     - 사용자의 프로필(지역, 학교, 가입연도)을 텍스트로 변환하여 벡터화
     - 코사인 유사도(Cosine Similarity)를 계산하여 유사도 점수 반환
+    
+    🔥 [개선됨] '글자(char)' 단위 분석 적용 (예: '남정' <-> '남정초등학교' 매칭)
     """
     if not users:
         return {}
 
-    # 1. 사용자 프로필을 '문서(Document)' 형태로 변환
-    # 예: "서울대 2020 서울"
-    # None 값은 빈 문자열로 처리
+    # 1. 사용자 프로필을 '문서'로 변환 (공백 제거하여 매칭 확률 높임)
+    # None 값 처리 및 문자열 변환
     user_docs = [
-        f"{u.school_name or ''} {u.admission_year or ''} {u.region or ''}" 
+        f"{str(u.school_name or '').replace(' ', '')} {str(u.region or '').replace(' ', '')} {u.admission_year or ''}" 
         for u in users
     ]
     
     # 타겟 유저의 프로필
-    target_doc = f"{target_user.school_name or ''} {target_user.admission_year or ''} {target_user.region or ''}"
+    target_doc = f"{str(target_user.school_name or '').replace(' ', '')} {str(target_user.region or '').replace(' ', '')} {target_user.admission_year or ''}"
     
     # 2. TF-IDF 벡터화 (단어의 중요도 반영)
-    # 한글 처리를 위해 tokenizer 옵션 등을 추가할 수 있으나 기본 설정으로도 충분
-    vectorizer = TfidfVectorizer()
+    # analyzer='char': 단어 대신 '글자' 단위로 분석
+    # ngram_range=(2, 3): 2~3글자씩 쪼개서 비교
+    vectorizer = TfidfVectorizer(analyzer='char', ngram_range=(2, 3))
     
     try:
         # 데이터가 너무 적거나(1명 이하) 단어가 하나도 없으면 에러 날 수 있음
