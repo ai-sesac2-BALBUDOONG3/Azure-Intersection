@@ -204,22 +204,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     : const Text("카카오로 로그인"),
               ),
             ),
-            
-            const SizedBox(height: 14),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SignupScreen(),
-                  ),
-                );
-              },
-              child: const Text(
-                "아직 계정이 없나요? 회원가입",
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
           ],
         ),
       ),
