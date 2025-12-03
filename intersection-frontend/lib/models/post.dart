@@ -9,6 +9,7 @@ class Post {
   final String? authorName;
   final String? authorSchool;
   final String? authorRegion;
+  final String? authorProfileImage;
 
   // 좋아요 정보
   int likesCount;
@@ -24,6 +25,7 @@ class Post {
     this.authorName,
     this.authorSchool,
     this.authorRegion,
+    this.authorProfileImage,
 
     this.likesCount = 0,
     this.liked = false,
@@ -56,6 +58,7 @@ class Post {
       authorName: json['author_name'],
       authorSchool: json['author_school'],
       authorRegion: json['author_region'],
+      authorProfileImage: json['author_profile_image'],
 
       // 🔥 백엔드 키와 정확히 일치하도록 수정
       likesCount: json['like_count'] ?? 0,

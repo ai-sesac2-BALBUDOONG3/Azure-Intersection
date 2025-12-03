@@ -15,11 +15,24 @@ class RecommendedFriendsScreen extends StatefulWidget {
 class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   bool _isLoading = true;
   List<User> _recommended = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
     _loadRecommended();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRecommended() async {
@@ -73,6 +86,16 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   Widget build(BuildContext context) {
     final currentFriends = AppState.friends;
 
+    // 검색 필터링
+    final filteredRecommended = _searchQuery.isEmpty
+        ? _recommended
+        : _recommended
+            .where((user) =>
+                user.name.toLowerCase().contains(_searchQuery) ||
+                (user.school?.toLowerCase().contains(_searchQuery) ?? false) ||
+                (user.region?.toLowerCase().contains(_searchQuery) ?? false))
+            .toList();
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -80,13 +103,63 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // 🔍 검색바
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _searchController,
+            style: const TextStyle(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: "추천 친구 검색...",
+              hintStyle: TextStyle(
+                color: Colors.grey.shade400,
+                fontSize: 15,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: Colors.grey.shade600,
+                size: 22,
+              ),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(
+                        Icons.clear,
+                        color: Colors.grey.shade600,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
         const Text(
           '지역·학교·나이가 유사한 친구들을 추천해요',
           style: TextStyle(fontSize: 13, color: Colors.grey),
         ),
         const SizedBox(height: 16),
 
-        ..._recommended.map((user) {
+        ...filteredRecommended.map((user) {
           final isFriendAlready =
               currentFriends.any((f) => f.id == user.id);
 
@@ -123,6 +196,32 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
             ),
           );
         }),
+
+        // 검색 결과 없음 안내
+        if (filteredRecommended.isEmpty && _searchQuery.isNotEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 48,
+                    color: Colors.grey.shade300,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "검색 결과가 없습니다",
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }

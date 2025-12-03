@@ -73,7 +73,7 @@ class LandingScreen extends StatelessWidget {
                         const SizedBox(height: 12),
 
                         Text(
-                          '그때의 우리, 지금의 나',
+                          '- 그때의 우리, 지금의 나 -',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 13,
@@ -123,7 +123,7 @@ class LandingScreen extends StatelessWidget {
                           Navigator.pushNamed(context, '/signup/phone');
                         },
                         child: const Text(
-                          '추억 시작하기',
+                          '추억 시작하기 (회원가입)',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,

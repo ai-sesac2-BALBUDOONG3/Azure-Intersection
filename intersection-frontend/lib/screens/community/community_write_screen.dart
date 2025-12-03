@@ -25,6 +25,14 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   File? selectedFile;
   String? previewName;
 
+  void _removeImage() {
+    setState(() {
+      selectedBytes = null;
+      selectedFile = null;
+      previewName = null;
+    });
+  }
+
   // -------------------------------------------------------
   // 🔥 이미지 선택 (웹/앱 완전 분리)
   // -------------------------------------------------------
@@ -130,26 +138,48 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text("새 글 작성"),
+        title: const Text(
+          "새 글",
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.white,
         actions: [
-          TextButton(
-            onPressed: _isPosting ? null : _submitPost,
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
             child: _isPosting
                 ? const Padding(
-                    padding: EdgeInsets.only(right: 16),
+                    padding: EdgeInsets.symmetric(horizontal: 16),
                     child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.black87,
+                      ),
                     ),
                   )
-                : const Text(
-                    "게시",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+                : FilledButton(
+                    onPressed: _submitPost,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.black87,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      "게시",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
           ),
@@ -157,57 +187,154 @@ class _CommunityWriteScreenState extends State<CommunityWriteScreen> {
       ),
 
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
           //-----------------------------------------------------
           // ✏ 글 입력
           //-----------------------------------------------------
-          TextField(
-            controller: _contentController,
-            minLines: 5,
-            maxLines: null,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: "무슨 생각을 하고 있나요?",
-              border: OutlineInputBorder(),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _contentController,
+              minLines: 8,
+              maxLines: null,
+              autofocus: true,
+              style: const TextStyle(fontSize: 16, height: 1.5),
+              decoration: InputDecoration(
+                hintText: "어떤 추억을 공유해볼까요?",
+                hintStyle: TextStyle(
+                  color: Colors.grey.shade400,
+                  fontSize: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: Colors.black87,
+                    width: 2,
+                  ),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.all(20),
+              ),
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
           //-----------------------------------------------------
           // 📷 이미지 미리보기
           //-----------------------------------------------------
           if (selectedBytes != null || selectedFile != null)
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: kIsWeb
-                  ? Image.memory(
-                      selectedBytes!,
-                      height: 180,
-                      fit: BoxFit.cover,
-                    )
-                  : Image.file(
-                      selectedFile!,
-                      height: 180,
-                      fit: BoxFit.cover,
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: kIsWeb
+                        ? Image.memory(
+                            selectedBytes!,
+                            width: double.infinity,
+                            height: 240,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.file(
+                            selectedFile!,
+                            width: double.infinity,
+                            height: 240,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Material(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        onTap: _removeImage,
+                        borderRadius: BorderRadius.circular(20),
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
                     ),
+                  ),
+                ],
+              ),
             ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
 
           //-----------------------------------------------------
           // 📸 이미지 추가 버튼
           //-----------------------------------------------------
-          OutlinedButton.icon(
-            onPressed: _pickImage,
-            icon: const Icon(Icons.photo),
-            label: const Text("이미지 첨부하기"),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200, width: 1.5),
+            ),
+            child: InkWell(
+              onTap: _pickImage,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.add_photo_alternate_outlined,
+                      color: Colors.grey.shade700,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      "이미지 첨부",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),

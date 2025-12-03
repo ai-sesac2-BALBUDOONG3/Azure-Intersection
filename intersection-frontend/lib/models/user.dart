@@ -4,9 +4,13 @@ import 'dart:typed_data';
 class User {
   final int id;
   final String name;
+  final String? nickname;
   final int birthYear;
+  final String? gender;
   final String region;
   final String school;
+  final String? schoolType;
+  final int? admissionYear;
 
   // 기존 URL 방식
   String? profileImageUrl;
@@ -22,9 +26,13 @@ class User {
   User({
     required this.id,
     required this.name,
+    this.nickname,
     required this.birthYear,
+    this.gender,
     required this.region,
     required this.school,
+    this.schoolType,
+    this.admissionYear,
     this.profileImageUrl,
     this.backgroundImageUrl,
     this.profileImageBytes,
@@ -36,9 +44,13 @@ class User {
     return User(
       id: json["id"],
       name: json["name"],
+      nickname: json["nickname"],
       birthYear: json["birth_year"] ?? json["birthYear"] ?? 0,
+      gender: json["gender"],
       region: json["region"] ?? "",
       school: json["school_name"] ?? json["school"] ?? "",
+      schoolType: json["school_type"],
+      admissionYear: json["admission_year"],
       profileImageUrl: json["profile_image"],
       backgroundImageUrl: json["background_image"],
       profileFeedImages: (json["profile_feed_images"] != null)
@@ -51,9 +63,13 @@ class User {
     return {
       "id": id,
       "name": name,
+      if (nickname != null) "nickname": nickname,
       "birth_year": birthYear,
+      if (gender != null) "gender": gender,
       "region": region,
       "school_name": school,
+      if (schoolType != null) "school_type": schoolType,
+      if (admissionYear != null) "admission_year": admissionYear,
       "profile_image": profileImageUrl,
       "background_image": backgroundImageUrl,
 
