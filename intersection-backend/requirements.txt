@@ -12,3 +12,4 @@ python-multipart>=0.0.20
 aiofiles>=25.1.0
 uvicorn[standard]
 gunicorn
+openai>=1.52.0

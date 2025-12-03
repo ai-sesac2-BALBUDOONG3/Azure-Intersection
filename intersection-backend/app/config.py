@@ -38,8 +38,17 @@ class Settings(BaseSettings):
     # CORS (프로덕션용)
     # =========================
     # 예: "https://app.example.com,https://admin.example.com"
-    # None이면 백엔드 코드에서 별도 기본값 처리
     ALLOWED_ORIGINS: str | None = None
+
+    # =========================
+    # Azure OpenAI
+    # =========================
+    AZURE_OPENAI_ENDPOINT: str | None = None
+    AZURE_OPENAI_API_KEY: str | None = None
+    # 포털에 적힌 api-version 사용. 지금은 2025-01-01-preview 기준.
+    AZURE_OPENAI_API_VERSION: str = "2025-01-01-preview"
+    # 예: gpt-4o-mini
+    AZURE_OPENAI_CHAT_DEPLOYMENT: str | None = None
 
     class Config:
         env_file = ".env"
