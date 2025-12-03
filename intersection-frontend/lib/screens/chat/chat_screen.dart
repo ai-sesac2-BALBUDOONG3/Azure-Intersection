@@ -1,5 +1,7 @@
 // lib/screens/chat/chat_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,18 +10,27 @@ import 'package:intl/intl.dart';
 import '../../models/chat_message.dart';
 import '../../services/api_service.dart';
 import '../../data/app_state.dart';
-import 'dart:async';
 
 class ChatScreen extends StatefulWidget {
   final int roomId;
   final int friendId;
   final String friendName;
 
+  // 채팅 리스트에서 넘어오는 추가 정보들
+  final String? friendProfileImage;
+  final bool iReportedThem;
+  final bool theyBlockedMe;
+  final bool theyLeft;
+
   const ChatScreen({
     super.key,
     required this.roomId,
     required this.friendId,
     required this.friendName,
+    this.friendProfileImage,
+    this.iReportedThem = false,
+    this.theyBlockedMe = false,
+    this.theyLeft = false,
   });
 
   @override
@@ -34,10 +45,10 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isLoading = true;
   bool _isSending = false;
 
-  bool _isBlocked = false;      // 전체 차단 여부
-  bool _iBlockedThem = false;   // 내가 차단했는지
-  bool _theyBlockedMe = false;  // 상대가 나를 차단했는지
-  bool _iReportedThem = false;  // 내가 신고했는지
+  bool _isBlocked = false; // 전체 차단 여부
+  bool _iBlockedThem = false; // 내가 차단했는지
+  bool _theyBlockedMe = false; // 상대가 나를 차단했는지
+  bool _iReportedThem = false; // 내가 신고했는지
 
   bool _showEmojiPicker = false;
   Timer? _pollingTimer;
@@ -47,6 +58,11 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+
+    // 리스트에서 넘어온 상태를 먼저 반영 (API 응답 오기 전까지 임시 상태)
+    _theyBlockedMe = widget.theyBlockedMe;
+    _iReportedThem = widget.iReportedThem;
+
     _checkBlockStatus();
     _checkReportStatus();
     _loadMessages();
@@ -318,9 +334,8 @@ class _ChatScreenState extends State<ChatScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              color: _iReportedThem
-                  ? Colors.orange.shade50
-                  : Colors.red.shade50,
+              color:
+                  _iReportedThem ? Colors.orange.shade50 : Colors.red.shade50,
               child: Row(
                 children: [
                   Icon(
@@ -399,7 +414,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   });
                 },
                 config: const Config(
-                  height: 256,
                   checkPlatformCompatibility: true,
                 ),
               ),
@@ -613,7 +627,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String _formatTime(String isoString) {
     try {
       final parsed = DateTime.parse(isoString);
-      final local = parsed.toLocal(); // 기기/브라우저 시간대 (KST 환경이면 한국시간)
+      final local = parsed.toLocal(); // 기기(한국이면 KST) 기준
 
       final formatter = DateFormat('HH:mm');
       return formatter.format(local);
@@ -930,8 +944,8 @@ class _ChatScreenState extends State<ChatScreen> {
               },
               child: const Text(
                 '해제',
-                style: TextStyle(
-                    color: Colors.green, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -985,8 +999,8 @@ class _ChatScreenState extends State<ChatScreen> {
               },
               child: const Text(
                 '취소하기',
-                style: TextStyle(
-                    color: Colors.blue, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
               ),
             ),
           ],

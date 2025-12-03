@@ -11,12 +11,11 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
-  file_picker: ^10.3.7
+  file_picker: ^10.3.6
   cupertino_icons: ^1.0.8
   http: ^1.2.0
   flutter_web_auth:
     path: local_plugins/flutter_web_auth
-  emoji_picker_flutter: ^4.4.0
   # ✅ 새로 추가 (이 2줄만 추가!)
   image_picker: ^1.0.4
   image_gallery_saver: ^2.0.3
@@ -25,6 +24,7 @@ dependencies:
   url_launcher: ^6.2.2
   # ✅ 채팅 시간 포맷용 추가
   intl: ^0.19.0
+  emoji_picker_flutter: ^1.6.4
 
 dev_dependencies:
   flutter_test:
