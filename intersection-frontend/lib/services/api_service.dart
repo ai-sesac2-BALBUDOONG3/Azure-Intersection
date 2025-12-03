@@ -127,10 +127,12 @@ class ApiService {
   }
 
   // ----------------------------------------------------
-  // 추천 친구
+  // 추천 친구 (룰 기반: GET /friends/recommendations)
+  //  - 기존 /users/me/recommended 에서 실제 백엔드 엔드포인트로 수정
   // ----------------------------------------------------
   static Future<List<User>> getRecommendedFriends() async {
-    final url = Uri.parse("${ApiConfig.baseUrl}/users/me/recommended");
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations");
 
     final response = await http.get(
       url,
@@ -138,16 +140,16 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List;
+      final list = jsonDecode(response.body) as List<dynamic>;
 
       return list
           .map(
             (data) => User(
               id: data["id"],
-              name: data["name"],
-              birthYear: data["birth_year"],
-              region: data["region"],
-              school: data["school_name"],
+              name: data["name"] ?? "",
+              birthYear: data["birth_year"] ?? 0,
+              region: data["region"] ?? "",
+              school: data["school_name"] ?? "",
               profileImageUrl: data["profile_image"],
               backgroundImageUrl: data["background_image"],
             ),
@@ -155,6 +157,69 @@ class ApiService {
           .toList();
     } else {
       throw Exception("추천 친구 불러오기 실패: ${response.body}");
+    }
+  }
+
+  // ----------------------------------------------------
+  // 추천 친구 (AI 이유 + 첫 메시지, 룰 기반 fallback)
+  //  반환 형식:
+  //  [
+  //    {
+  //      "user": { ...유저 JSON... },
+  //      "reason": "추천 이유",
+  //      "first_messages": ["메시지1", "메시지2", ...]
+  //    },
+  //    ...
+  //  ]
+  // ----------------------------------------------------
+  static Future<List<Map<String, dynamic>>> getFriendRecommendationsAI() async {
+    // 1차: AI 추천 시도
+    final aiUrl =
+        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations/ai");
+
+    try {
+      final aiResponse = await http.get(
+        aiUrl,
+        headers: _headers(json: false),
+      );
+
+      if (aiResponse.statusCode == 200) {
+        final list = jsonDecode(aiResponse.body) as List<dynamic>;
+        // 백엔드에서 이미 user + reason + first_messages 형태로 내려줌
+        return List<Map<String, dynamic>>.from(list);
+      }
+    } catch (_) {
+      // 네트워크 오류 등은 무시하고 fallback 진행
+    }
+
+    // 2차: 룰 기반 추천으로 fallback
+    final ruleUrl =
+        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations");
+
+    final ruleResponse = await http.get(
+      ruleUrl,
+      headers: _headers(json: false),
+    );
+
+    if (ruleResponse.statusCode == 200) {
+      final list = jsonDecode(ruleResponse.body) as List<dynamic>;
+
+      // 룰 기반 응답(User 리스트)을 AI 응답과 동일한 구조로 감싼다.
+      return list.map<Map<String, dynamic>>((data) {
+        final user = Map<String, dynamic>.from(data as Map);
+        final name = user["name"] ?? "친구";
+
+        return {
+          "user": user,
+          "reason": "학교/입학년도/지역/나이대가 비슷한 친구라 추천합니다.",
+          "first_messages": [
+            "$name님, 우리 프로필이 비슷해서 추천 친구로 떴어요. 반가워요!",
+            "혹시 같은 시기에 같은 학교 다녔을지도 모르겠네요 :)",
+          ],
+        };
+      }).toList();
+    } else {
+      throw Exception("AI 추천 친구 불러오기 실패: ${ruleResponse.body}");
     }
   }
 
@@ -341,8 +406,6 @@ class ApiService {
 
     throw Exception("좋아요 토글 실패: ${response.body}");
   }
-
-
 
   // ----------------------------------------------------
   // ❤️ 댓글 좋아요
