@@ -19,7 +19,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("신고 사유를 입력해줘.")),
+        const SnackBar(content: Text("신고 사유를 선택해 주세요.")),
       );
       return;
     }
@@ -31,7 +31,7 @@ class _ReportScreenState extends State<ReportScreen> {
       setState(() => _isSending = false);
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("신고가 접수되었어.")),
+        const SnackBar(content: Text("신고 접수가 완료되었습니다")),
       );
     });
   }
@@ -48,7 +48,7 @@ class _ReportScreenState extends State<ReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "신고 사유를 입력해줘",
+              "신고 사유 선택",
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -74,7 +74,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text("신고 제출"),
+                    : const Text("제출"),
               ),
             )
           ],

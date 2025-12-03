@@ -77,14 +77,18 @@ class ApiService {
       return User(
         id: data["id"],
         name: data["name"] ?? "",
+        nickname: data["nickname"],
         birthYear: data["birth_year"] ?? 0,
+        gender: data["gender"],
         region: data["region"] ?? "",
         school: data["school_name"] ?? "",
+        schoolType: data["school_type"],
+        admissionYear: data["admission_year"],
         profileImageUrl: data["profile_image"],
         backgroundImageUrl: data["background_image"],
         profileFeedImages: (data["feed_images"] != null)
-            ? List<String>.from(data["feed_images"])
-            : [],
+        ? List<String>.from(data["feed_images"])
+        : [],
       );
     } else {
       throw Exception("내 정보 불러오기 실패: ${response.body}");

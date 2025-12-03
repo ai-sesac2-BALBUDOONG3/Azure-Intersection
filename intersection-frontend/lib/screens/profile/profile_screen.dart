@@ -388,17 +388,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _saveProfileImages,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text(
-                        "저장",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                      style: ButtonStyle(
+                        backgroundColor:
+                            MaterialStateProperty.all(Colors.black87),
+                        foregroundColor:
+                            MaterialStateProperty.all(Colors.white),
+                        elevation: MaterialStateProperty.all(6),
+                        shadowColor:
+                            MaterialStateProperty.all(Colors.black54),
+                        shape: MaterialStateProperty.all(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        padding: MaterialStateProperty.all(
+                            const EdgeInsets.symmetric(vertical: 14)),
+                        textStyle: MaterialStateProperty.all(
+                          const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700),
                         ),
                       ),
+                      child: const Text("저장"),
                     ),
                   ),
 
@@ -416,6 +426,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         );
                       },
+                      style: ButtonStyle(
+                        backgroundColor:
+                            MaterialStateProperty.all(Colors.black87),
+                        foregroundColor:
+                            MaterialStateProperty.all(Colors.white),
+                        elevation: MaterialStateProperty.all(6),
+                        shadowColor:
+                            MaterialStateProperty.all(Colors.black54),
+                        shape: MaterialStateProperty.all(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        padding: MaterialStateProperty.all(
+                            const EdgeInsets.symmetric(vertical: 14)),
+                        textStyle: MaterialStateProperty.all(
+                          const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
                       child: const Text("프로필 수정"),
                     ),
                   ),
@@ -426,17 +456,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
+                      style: ButtonStyle(
+                        backgroundColor:
+                            MaterialStateProperty.all(Colors.redAccent),
+                        foregroundColor:
+                            MaterialStateProperty.all(Colors.white),
+                        elevation: MaterialStateProperty.all(6),
+                        shape: MaterialStateProperty.all(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        padding: MaterialStateProperty.all(
+                            const EdgeInsets.symmetric(vertical: 14)),
+                        textStyle: MaterialStateProperty.all(
+                            const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700)),
                       ),
-                      onPressed: () =>
-                          _showLogoutConfirmDialog(context),
-                      child: const Text(
-                        "로그아웃",
+                      onPressed: () => _showLogoutConfirmDialog(context),
+                      child: const Text("로그아웃"),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // 회원탈퇴 버튼
+                  Center(
+                    child: TextButton(
+                      onPressed: () => _showDeleteAccountDialog(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey.shade500,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: Text(
+                        "회원탈퇴",
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          decoration: TextDecoration.underline,
+                          color: Colors.grey.shade500,
                         ),
                       ),
                     ),
@@ -455,68 +515,219 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showLogoutConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
+        return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          contentPadding:
-              const EdgeInsets.fromLTRB(24, 30, 24, 20),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  shape: BoxShape.circle,
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.logout_rounded,
+                    size: 40,
+                    color: Colors.red.shade400,
+                  ),
                 ),
-                child: Icon(
-                  Icons.logout_rounded,
-                  size: 48,
-                  color: Colors.red.shade400,
+                const SizedBox(height: 20),
+                const Text(
+                  '로그아웃',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                '정말 로그아웃 하시겠습니까?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                  height: 1.4,
+                const SizedBox(height: 8),
+                Text(
+                  '정말 로그아웃 하시겠습니까?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.grey.shade600,
+                    height: 1.4,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          actions: [
-            Expanded(
-              child: TextButton(
-                onPressed: () =>
-                    Navigator.of(dialogContext).pop(),
-                child: const Text("취소"),
-              ),
-            ),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () async {
-                  Navigator.of(dialogContext).pop();
-                  await AppState.logout();
-                  if (!context.mounted) return;
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LandingScreen(),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          "취소",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
                     ),
-                    (route) => false,
-                  );
-                },
-                child: const Text("로그아웃"),
-              ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () async {
+                          Navigator.of(dialogContext).pop();
+                          await AppState.logout();
+                          if (!context.mounted) return;
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LandingScreen(),
+                            ),
+                            (route) => false,
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red.shade400,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          "로그아웃",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.warning_rounded,
+                    size: 40,
+                    color: Colors.red.shade400,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '추억 공유를 멈추시겠어요?',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '탈퇴 이후에는 복구가 불가능하고\n모든 채팅 기록이 삭제됩니다',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Colors.grey.shade600,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: Colors.grey.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          "취소",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () async {
+                          Navigator.of(dialogContext).pop();
+                          // TODO: 회원탈퇴 API 호출
+                          await AppState.logout();
+                          if (!context.mounted) return;
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LandingScreen(),
+                            ),
+                            (route) => false,
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.red.shade400,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          "탈퇴하기",
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
