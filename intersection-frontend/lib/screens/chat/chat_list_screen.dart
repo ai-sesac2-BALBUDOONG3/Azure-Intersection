@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../config/api_config.dart';
+import '../../data/app_state.dart';
 import '../../models/chat_room.dart';
 import '../../services/api_service.dart';
-import '../../data/app_state.dart';
-import '../../config/api_config.dart';
 import 'chat_screen.dart';
-import 'dart:async';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -17,6 +20,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
   List<ChatRoom> _chatRooms = [];
   bool _isLoading = true;
   Timer? _pollingTimer;
+
+  // 채팅 리스트 시간 포맷터 (오전 8:32)
+  final DateFormat _timeFormatter = DateFormat('a h:mm', 'ko');
+  final DateFormat _dateFormatterSameYear = DateFormat('MM/dd', 'ko');
+  final DateFormat _dateFormatterOtherYear = DateFormat('yyyy/MM/dd', 'ko');
 
   @override
   void initState() {
@@ -115,28 +123,47 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
+  /// 채팅 리스트에 표시할 시간 문자열 포맷
+  String _formatChatTime(String isoString) {
+    try {
+      // 서버에서 온 시간을 DateTime으로 파싱
+      DateTime dt = DateTime.parse(isoString);
+
+      // UTC 로 들어온 경우를 대비해서 로컬 타임존으로 변환
+      dt = dt.toLocal();
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final date = DateTime(dt.year, dt.month, dt.day);
+
+      // 오늘 보낸 메시지면: "오전 8:32"
+      if (date == today) {
+        return _timeFormatter.format(dt);
+      }
+
+      // 어제 보낸 메시지면: "어제 오전 8:32"
+      final yesterday = today.subtract(const Duration(days: 1));
+      if (date == yesterday) {
+        return "어제 ${_timeFormatter.format(dt)}";
+      }
+
+      // 같은 해: "MM/dd"
+      if (dt.year == now.year) {
+        return _dateFormatterSameYear.format(dt);
+      }
+
+      // 그 외: "yyyy/MM/dd"
+      return _dateFormatterOtherYear.format(dt);
+    } catch (e) {
+      debugPrint("시간 포맷 오류: $e");
+      return "";
+    }
+  }
+
   Widget _buildChatRoomTile(ChatRoom room) {
     String timeText = "";
-    if (room.lastMessageTime != null) {
-      try {
-        final dateTime = DateTime.parse(room.lastMessageTime!);
-        final now = DateTime.now();
-        final diff = now.difference(dateTime);
-
-        if (diff.inMinutes < 1) {
-          timeText = "방금";
-        } else if (diff.inHours < 1) {
-          timeText = "${diff.inMinutes}분 전";
-        } else if (diff.inDays < 1) {
-          timeText = "${diff.inHours}시간 전";
-        } else if (diff.inDays < 7) {
-          timeText = "${diff.inDays}일 전";
-        } else {
-          timeText = "${dateTime.month}/${dateTime.day}";
-        }
-      } catch (e) {
-        timeText = "";
-      }
+    if (room.lastMessageTime != null && room.lastMessageTime!.isNotEmpty) {
+      timeText = _formatChatTime(room.lastMessageTime!);
     }
 
     return ListTile(
@@ -208,7 +235,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             ),
           ],
-          
           Expanded(
             child: Text(
               room.lastMessage ?? "메시지가 없습니다",
@@ -255,7 +281,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               friendProfileImage: room.friendProfileImage,
               iReportedThem: room.iReportedThem,
               theyBlockedMe: room.theyBlockedMe,
-              theyLeft: room.theyLeft,  // ✅ 추가
+              theyLeft: room.theyLeft,
             ),
           ),
         ).then((_) => _loadChatRooms());
