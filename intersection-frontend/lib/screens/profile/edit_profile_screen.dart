@@ -182,8 +182,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             children: [
               _buildField("이름", nameController),
               const SizedBox(height: 16),
-              _buildField("닉네임", nicknameController),
-              const SizedBox(height: 16),
               _buildReadOnlyField(
                 label: "성별",
                 value: _genderDisplay(genderValue),

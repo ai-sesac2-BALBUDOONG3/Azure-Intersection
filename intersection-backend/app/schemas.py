@@ -28,6 +28,7 @@ class UserCreate(BaseModel):
     schools: Optional[List[Dict[str, Any]]] = None  # 여러 학교 정보 (JSON 형식)
     profile_image: Optional[str] = None
     background_image: Optional[str] = None    
+    phone: Optional[str] = None
 
 class UserRead(BaseModel):
     id: int
@@ -80,6 +81,7 @@ class PostRead(BaseModel):
     # 👍 [추가됨] 좋아요 관련 필드
     like_count: int = 0       # 좋아요 수
     is_liked: bool = False    # 내가 좋아요 눌렀는지 여부
+    comment_count: int = 0  # 댓글 수
 
 class PostReportCreate(BaseModel):
     """게시글 신고 요청"""

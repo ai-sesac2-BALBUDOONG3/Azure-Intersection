@@ -315,25 +315,51 @@ class ApiService {
     throw Exception("게시글 작성 실패: ${response.body}");
   }
 
+// ----------------------------------------------------
+  // 📸 게시글 작성 (이미지 파일 포함 전송) - 수정된 버전
+  // ----------------------------------------------------
   static Future<Map<String, dynamic>> createPostWithMedia({
     required String content,
-    List<String> mediaUrls = const [],
+    File? imageFile,       // 앱(휴대폰)에서 선택한 파일
+    Uint8List? imageBytes, // 웹에서 선택한 파일 데이터
+    String? fileName,      // 파일 이름
   }) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/users/me/posts/");
+    
+    // 1. Multipart 요청 생성 (파일 전송용 봉투 만들기)
+    var request = http.MultipartRequest("POST", url);
+    
+    // 2. 헤더 설정 (로그인 토큰 붙이기)
+    if (AppState.token != null) {
+      request.headers["Authorization"] = "Bearer ${AppState.token}";
+    }
 
-    final body = <String, dynamic>{
-      "content": content,
-      if (mediaUrls.isNotEmpty) "image_url": mediaUrls.first,
-    };
+    // 3. 내용(Content) 넣기
+    request.fields["content"] = content;
 
-    final response = await http.post(
-      url,
-      headers: _headers(),
-      body: jsonEncode(body),
-    );
+    // 4. 사진 파일 넣기
+    if (imageFile != null) {
+      // 📱 앱: 파일 경로로 넣기
+      request.files.add(await http.MultipartFile.fromPath(
+        "file", // 백엔드가 'file'이라는 이름으로 받기로 약속했음
+        imageFile.path,
+      ));
+    } else if (imageBytes != null && fileName != null) {
+      // 🌐 웹: 데이터(Bytes)로 넣기
+      request.files.add(http.MultipartFile.fromBytes(
+        "file",
+        imageBytes,
+        filename: fileName,
+      ));
+    }
+
+    // 5. 전송 및 결과 확인
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
+      // 한글 깨짐 방지를 위해 utf8.decode 사용
+      return jsonDecode(utf8.decode(response.bodyBytes));
     }
 
     throw Exception("게시글 작성 실패: ${response.body}");
@@ -400,20 +426,6 @@ class ApiService {
 
     return response.statusCode == 200;
   }
-
-  // ----------------------------------------------------
-  // ❤️ 게시물 좋아요 (프론트 전용: 서버 연동 전)
-  // ----------------------------------------------------
-  static Future<Map<String, dynamic>> togglePostLike(int postId) async {
-    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId/like");
-    final response = await http.post(url, headers: _headers(json: false));
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
-    }
-    throw Exception("게시글 좋아요 실패: ${response.body}");
-  }
-
   // ----------------------------------------------------
   // ❤️ 게시물 좋아요 — 서버 토글 방식
   // ----------------------------------------------------

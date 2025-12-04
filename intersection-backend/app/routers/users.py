@@ -77,6 +77,7 @@ def create_user(data: UserCreate):
             admission_year=data.admission_year,  # 하위 호환성
             schools=schools_json,  # 여러 학교 정보 (JSON)
             email=data.login_id,
+            phone=data.phone,
             profile_image=data.profile_image,
             background_image=data.background_image
         )
