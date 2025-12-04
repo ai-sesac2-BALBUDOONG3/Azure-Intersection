@@ -5,7 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:intersection/config/api_config.dart';
 import 'package:intersection/data/app_state.dart';
 import 'package:intersection/screens/main_tab_screen.dart';
-import 'package:intersection/screens/signup/signup_screen.dart';
+// ▼ [수정] 회원가입 첫 단계인 '휴대폰 인증 화면'을 import 합니다.
+import 'package:intersection/screens/auth/phone_verification_screen.dart'; 
 import 'package:intersection/services/api_service.dart';
 import 'package:flutter_web_auth/flutter_web_auth.dart';
 
@@ -36,29 +37,21 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // -----------------------------------------
       // 1) 로그인 → 토큰 획득
-      // -----------------------------------------
       final token = await ApiService.login(email, password);
       AppState.token = token;
 
-      // -----------------------------------------
       // 2) 로그인 후 내 정보 불러오기
-      // -----------------------------------------
       final user = await ApiService.getMyInfo();
 
-      // -----------------------------------------
       // 3) AppState에 로그인 정보 적용
-      // -----------------------------------------
-      await AppState.login(token, user);   // ⭐ await 추가됨 ⭐
+      await AppState.login(token, user);
 
       if (!mounted) return;
 
       setState(() => _isLoading = false);
 
-      // -----------------------------------------
       // 4) 메인 화면 이동
-      // -----------------------------------------
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const MainTabScreen()),
@@ -72,6 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     }
   }
+
   // ----------------------------------------------------
   // Kakao OAuth flow (flutter_web_auth)
   // ----------------------------------------------------
@@ -105,20 +99,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         final user = await ApiService.getMyInfo();
-
-        // ⭐ await 추가
         await AppState.login(token, user);
 
         if (!mounted) return;
         setState(() => _isLoading = false);
 
+        // 프로필 정보가 부족하면 회원가입(프로필 설정)으로, 아니면 메인으로
         final needsProfile =
             user.birthYear == 0 || user.region.isEmpty || user.school.isEmpty;
 
         if (needsProfile) {
+          // 카카오 로그인 후 프로필 설정이 필요할 때도 휴대폰 인증부터 시작하려면 아래를 PhoneVerificationScreen으로 변경 가능
+          // 일단 기존 로직 유지를 위해 SignupScreen()으로 둡니다. (필요 시 변경)
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const SignupScreen()),
+            MaterialPageRoute(builder: (_) => const PhoneVerificationScreen()),
             (route) => false,
           );
         } else {
@@ -134,9 +129,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         setState(() => _isLoading = false);
 
+        // 정보 로드 실패 시 회원가입으로 간주
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const SignupScreen()),
+          MaterialPageRoute(builder: (_) => const PhoneVerificationScreen()),
           (route) => false,
         );
       }
@@ -205,20 +201,25 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             
-            const SizedBox(height: 14),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const SignupScreen(),
-                  ),
-                );
-              },
-              child: const Text(
-                "아직 계정이 없나요? 회원가입",
-                style: TextStyle(fontSize: 14),
-              ),
+            // 👇 [수정됨] 회원가입 버튼 클릭 시 PhoneVerificationScreen으로 이동
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text("아직 계정이 없으신가요?"),
+                TextButton(
+                  onPressed: () {
+                    // 여기서 바로 휴대폰 인증 화면으로 이동합니다.
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PhoneVerificationScreen(),
+                      ),
+                    );
+                  },
+                  child: const Text("회원가입"),
+                ),
+              ],
             ),
           ],
         ),

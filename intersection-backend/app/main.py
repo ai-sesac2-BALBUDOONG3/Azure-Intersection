@@ -43,8 +43,9 @@ UPLOAD_DIR = "uploads"
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# 정적 파일 서빙
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+# 🔥 [수정됨] 정적 파일 서빙 경로를 '/static'으로 변경
+# 기존: app.mount("/uploads", ...) -> 수정: app.mount("/static", ...)
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
 
 @app.on_event("startup")

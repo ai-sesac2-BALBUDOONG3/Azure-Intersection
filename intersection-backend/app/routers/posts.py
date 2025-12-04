@@ -1,23 +1,58 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
-from sqlmodel import Session, select, func
-# 👇 스키마 임포트
-from ..schemas import PostCreate, PostRead, PostReportCreate, PostReportRead
-# 👇 모델 임포트 (🔥 UserReport 추가됨)
-from ..models import Post, User, PostLike, PostReport, UserBlock, Notification, UserReport
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from sqlmodel import Session, select, func, desc, or_
+# 🔥 [수정] List가 추가되었습니다.
+from typing import List, Optional 
+import shutil
+import uuid
+import os
+
 from ..db import engine
-from ..routers.users import get_current_user
-from sqlalchemy import or_
+from ..models import (
+    User, Post, PostLike, Comment, CommentLike, 
+    PostReport, CommentReport, Notification, UserBlock, UserReport
+)
+from ..dependencies import get_current_user
+from ..schemas import PostRead, PostCreate, PostReportRead, PostReportCreate
 
 router = APIRouter(tags=["posts"])
 
+# -------------------------------------------------------
+# 📝 게시글 작성 (이미지 업로드 포함) - 수정됨
+# -------------------------------------------------------
 @router.post("/users/me/posts/", response_model=PostRead)
-def create_post(payload: PostCreate, current_user: User = Depends(get_current_user)):
+async def create_post(
+    content: str = Form(...),                    # 텍스트 내용 (Form)
+    file: Optional[UploadFile] = File(None),     # 이미지 파일 (File)
+    current_user: User = Depends(get_current_user)
+):
+    image_url = None
+
+    # 1. 이미지 파일이 있으면 서버(uploads 폴더)에 저장
+    if file:
+        # 폴더 없으면 생성
+        UPLOAD_DIR = "uploads"
+        if not os.path.exists(UPLOAD_DIR):
+            os.makedirs(UPLOAD_DIR)
+
+        # 파일명 중복 방지를 위한 UUID 사용
+        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        filename = f"{uuid.uuid4()}.{ext}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        # 파일 쓰기
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # DB에 저장될 접근 URL (/static/...)
+        # main.py에서 app.mount("/static", StaticFiles(directory="uploads")) 설정 필수
+        image_url = f"/static/{filename}"
+
+    # 2. 게시글 정보 DB 저장
     with Session(engine) as session:
         post = Post(
             author_id=current_user.id, 
-            content=payload.content, 
-            image_url=payload.image_url
+            content=content, 
+            image_url=image_url
         )
         session.add(post)
         session.commit()
@@ -30,27 +65,30 @@ def create_post(payload: PostCreate, current_user: User = Depends(get_current_us
             image_url=post.image_url,
             created_at=post.created_at.isoformat(),
             author_name=current_user.name,
+            author_nickname=current_user.nickname,
+            author_profile_image=current_user.profile_image,
             author_school=current_user.school_name,
             author_region=current_user.region,
             like_count=0,
+            comment_count=0,
             is_liked=False
         )
 
+# -------------------------------------------------------
+# 📋 게시글 목록 조회 (검색 + 필터링 + 차단)
+# -------------------------------------------------------
 @router.get("/posts/", response_model=List[PostRead])
 def list_posts(
     skip: int = 0,    
     limit: int = 10,  
     keyword: Optional[str] = None,
     filter_type: str = "all",  # "all"(전체), "school"(내 커뮤니티만)
-
     current_user: Optional[User] = Depends(get_current_user)
 ):
     with Session(engine) as session:
         statement = select(Post, User).join(User, Post.author_id == User.id)
 
-# -------------------------------------------------------
         # 🔍 1. 검색 기능 (키워드가 있을 때만 작동)
-        # -------------------------------------------------------
         if keyword:
             statement = statement.where(
                 or_(
@@ -60,38 +98,29 @@ def list_posts(
                 )
             )
 
-        # -------------------------------------------------------
         # 🏫 2. 게시판 분리 (필터링)
-        # -------------------------------------------------------
         if filter_type == "school" and current_user:
-            # 내 학교(커뮤니티) 사람들의 글만 보여줌
             if current_user.community_id:
                 statement = statement.where(User.community_id == current_user.community_id)
             else:
-                # 커뮤니티가 없는 유저라면? (예외 처리: 내 글만 보여주거나 빈 목록)
-                # 여기서는 일단 결과가 없도록 처리
-                statement = statement.where(User.id == -1)
+                statement = statement.where(User.id == -1) # 커뮤니티 없는 경우 빈 결과
 
-
-
-        # 🚫 필터링 (차단 + 신고)
+        # 🚫 3. 차단 및 신고 필터링
         if current_user:
-            # 1. 차단 관계 (내가 차단함 OR 나를 차단함)
+            # 차단 관계 (내가 차단함 OR 나를 차단함)
             blocking_stmt = select(UserBlock.blocked_user_id).where(UserBlock.user_id == current_user.id)
             blocking_ids = session.exec(blocking_stmt).all()
             
             blocked_by_stmt = select(UserBlock.user_id).where(UserBlock.blocked_user_id == current_user.id)
             blocked_by_ids = session.exec(blocked_by_stmt).all()
             
-            # 2. 신고 관계 (내가 신고한 사람 - pending 상태)
-            # 🔥 여기서 UserReport 모델을 사용함
+            # 신고 관계 (내가 신고한 사람 - pending 상태)
             reported_stmt = select(UserReport.reported_user_id).where(
                 UserReport.reporter_id == current_user.id,
                 UserReport.status == "pending"
             )
             reported_ids = session.exec(reported_stmt).all()
             
-            # ID 합치기 (중복 제거)
             excluded_ids = list(set(blocking_ids + blocked_by_ids + reported_ids))
             
             if excluded_ids:
@@ -106,6 +135,9 @@ def list_posts(
             # ❤️ 좋아요 수 계산
             like_count = session.exec(select(func.count(PostLike.id)).where(PostLike.post_id == post.id)).one()
             
+            # 💬 댓글 수 계산
+            comment_count = session.exec(select(func.count(Comment.id)).where(Comment.post_id == post.id)).one()
+
             # ❤️ 내가 좋아요 눌렀는지 확인
             is_liked = False
             if current_user:
@@ -122,13 +154,19 @@ def list_posts(
                 image_url=post.image_url,
                 created_at=post.created_at.isoformat(),
                 author_name=user.name,
+                author_nickname=user.nickname,
+                author_profile_image=user.profile_image,
                 author_school=user.school_name,
                 author_region=user.region,
                 like_count=like_count,
+                comment_count=comment_count,
                 is_liked=is_liked
             ))
         return post_reads
 
+# -------------------------------------------------------
+# 📄 게시글 상세 조회
+# -------------------------------------------------------
 @router.get("/posts/{post_id}", response_model=PostRead)
 def get_post(post_id: int, current_user: Optional[User] = Depends(get_current_user)):
     with Session(engine) as session:
@@ -151,8 +189,9 @@ def get_post(post_id: int, current_user: Optional[User] = Depends(get_current_us
             if block_check:
                 raise HTTPException(status_code=403, detail="Blocked user's post")
 
-        # 좋아요 정보
         like_count = session.exec(select(func.count(PostLike.id)).where(PostLike.post_id == post.id)).one()
+        comment_count = session.exec(select(func.count(Comment.id)).where(Comment.post_id == post.id)).one()
+        
         is_liked = False
         if current_user:
             liked_check = session.exec(
@@ -168,17 +207,22 @@ def get_post(post_id: int, current_user: Optional[User] = Depends(get_current_us
             image_url=post.image_url,
             created_at=post.created_at.isoformat(),
             author_name=user.name,
+            author_nickname=user.nickname,
+            author_profile_image=user.profile_image,
             author_school=user.school_name,
             author_region=user.region,
             like_count=like_count,
+            comment_count=comment_count,
             is_liked=is_liked
         )
 
+# -------------------------------------------------------
+# ✏️ 게시글 수정
+# -------------------------------------------------------
 @router.put("/posts/{post_id}", response_model=PostRead)
 def update_post(post_id: int, payload: PostCreate, current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
-        statement = select(Post).where(Post.id == post_id)
-        post = session.exec(statement).first()
+        post = session.get(Post, post_id)
         
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
@@ -192,8 +236,9 @@ def update_post(post_id: int, payload: PostCreate, current_user: User = Depends(
         session.commit()
         session.refresh(post)
         
-        # 업데이트 후 반환 정보 재조회
         like_count = session.exec(select(func.count(PostLike.id)).where(PostLike.post_id == post.id)).one()
+        comment_count = session.exec(select(func.count(Comment.id)).where(Comment.post_id == post.id)).one()
+        
         liked_check = session.exec(
             select(PostLike).where(PostLike.post_id == post.id, PostLike.user_id == current_user.id)
         ).first()
@@ -203,35 +248,63 @@ def update_post(post_id: int, payload: PostCreate, current_user: User = Depends(
             id=post.id, 
             author_id=post.author_id, 
             content=post.content, 
-            image_url=post.image_url,
+            image_url=post.image_url, 
             created_at=post.created_at.isoformat(),
             author_name=current_user.name,
+            author_nickname=current_user.nickname,
+            author_profile_image=current_user.profile_image,
             author_school=current_user.school_name,
             author_region=current_user.region,
             like_count=like_count,
+            comment_count=comment_count,
             is_liked=is_liked
         )
 
-@router.delete("/posts/{post_id}")
+# -------------------------------------------------------
+# 🗑️ 게시글 삭제
+# -------------------------------------------------------
+@router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
-        statement = select(Post).where(Post.id == post_id)
-        post = session.exec(statement).first()
+        post = session.get(Post, post_id)
         
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
         if post.author_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not post author")
             
-        # 🔥 [추가] 관련 좋아요 데이터 삭제 (FK 오류 방지)
-        session.exec(select(PostLike).where(PostLike.post_id == post.id)).all()
-        # 주의: SQLModel 관계 설정에서 cascade="all, delete"가 되어 있다면 이 과정은 생략 가능하나, 
-        # 명시적으로 지워주는 것이 안전합니다.
+        # 1. 댓글 및 댓글의 하위 데이터 삭제
+        comments = session.exec(select(Comment).where(Comment.post_id == post_id)).all()
+        for comment in comments:
+            # 댓글 좋아요
+            c_likes = session.exec(select(CommentLike).where(CommentLike.comment_id == comment.id)).all()
+            for cl in c_likes: session.delete(cl)
+            # 댓글 신고
+            c_reports = session.exec(select(CommentReport).where(CommentReport.reported_comment_id == comment.id)).all()
+            for cr in c_reports: session.delete(cr)
+            # 댓글 자체
+            session.delete(comment)
+
+        # 2. 게시글 좋아요 삭제
+        p_likes = session.exec(select(PostLike).where(PostLike.post_id == post_id)).all()
+        for pl in p_likes: session.delete(pl)
+
+        # 3. 게시글 신고 삭제
+        p_reports = session.exec(select(PostReport).where(PostReport.reported_post_id == post_id)).all()
+        for pr in p_reports: session.delete(pr)
+
+        # 4. 관련 알림 삭제
+        notifs = session.exec(select(Notification).where(Notification.related_post_id == post_id)).all()
+        for n in notifs: session.delete(n)
             
+        # 5. 게시글 최종 삭제
         session.delete(post)
         session.commit()
-        return {"ok": True}
+        return None
 
+# -------------------------------------------------------
+# ❤️ 게시글 좋아요
+# -------------------------------------------------------
 @router.post("/posts/{post_id}/like")
 def like_post(post_id: int, current_user: User = Depends(get_current_user)):
     with Session(engine) as session:
@@ -256,7 +329,6 @@ def like_post(post_id: int, current_user: User = Depends(get_current_user)):
             
             # 🔔 알림 생성
             if post.author_id != current_user.id:
-                # 중복 알림 방지 체크
                 existing_notif = session.exec(
                     select(Notification).where(
                         Notification.receiver_id == post.author_id,
@@ -267,7 +339,7 @@ def like_post(post_id: int, current_user: User = Depends(get_current_user)):
                 ).first()
                 
                 if not existing_notif:
-                    sender_name = current_user.name or current_user.nickname or "알 수 없음"
+                    sender_name = current_user.nickname or current_user.name or "알 수 없음"
                     notif = Notification(
                         receiver_id=post.author_id,
                         sender_id=current_user.id,
@@ -282,6 +354,9 @@ def like_post(post_id: int, current_user: User = Depends(get_current_user)):
         
         return {"ok": True, "is_liked": liked, "like_count": like_count}
 
+# -------------------------------------------------------
+# 🚨 게시글 신고
+# -------------------------------------------------------
 @router.post("/posts/{post_id}/report", response_model=PostReportRead)
 def report_post(
     post_id: int, 

@@ -31,6 +31,7 @@ class UserCreate(BaseModel):
     admission_year: Optional[int] = None
     profile_image: Optional[str] = None
     background_image: Optional[str] = None    
+    phone: Optional[str] = None
 
 
 class UserRead(BaseModel):
@@ -39,6 +40,7 @@ class UserRead(BaseModel):
     birth_year: Optional[int] = None
     region: Optional[str] = None
     school_name: Optional[str] = None
+    phone: Optional[str] = None  # 전화번호
 
     # 프로필/배경 이미지 URL 필드
     profile_image: Optional[str] = None
@@ -84,6 +86,7 @@ class PostRead(BaseModel):
     # 좋아요 관련 필드
     like_count: int = 0       # 좋아요 수
     is_liked: bool = False    # 내가 좋아요 눌렀는지 여부
+    comment_count: int = 0  # 댓글 수
 
 
 class PostReportCreate(BaseModel):
@@ -177,6 +180,8 @@ class ChatRoomRead(BaseModel):
 
     # 채팅방 나가기 상태
     they_left: bool = False  # 상대방이 채팅방을 나감
+    # ✅ 고정 여부 추가
+    is_pinned: bool = False  # 채팅방 고정 여부
 
 
 class ChatMessageCreate(BaseModel):
@@ -204,6 +209,8 @@ class ChatMessageRead(BaseModel):
     file_name: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
+    # ✅ 고정 여부 추가
+    is_pinned: bool = False  # 메시지 고정 여부
 
 
 # ------------------------------------------------------

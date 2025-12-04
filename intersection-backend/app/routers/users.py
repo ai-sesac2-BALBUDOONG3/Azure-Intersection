@@ -6,36 +6,22 @@ from sqlalchemy import or_
 
 # 🔥 스키마 및 모델 임포트
 from ..schemas import UserCreate, UserRead, UserUpdate, Token, NotificationRead
-from ..models import User, Post, Notification, UserBlock, UserReport  # ✅ UserBlock, UserReport 추가
+from ..models import (
+    User, Post, Comment, UserFriendship, ChatRoom, ChatMessage, 
+    UserBlock, UserReport, PostLike, CommentLike, PostReport, 
+    CommentReport, Notification
+)
 from ..db import engine
 from ..auth import get_password_hash, verify_password, create_access_token, decode_access_token
 from fastapi.security import OAuth2PasswordBearer
 from ..services import assign_community, get_recommended_friends
 
+# 🔥 [핵심 수정] 순환 참조 해결을 위해 dependencies에서 가져옴
+from ..dependencies import get_current_user
+
 router = APIRouter(tags=["users"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
-
-
-def get_user_by_id(session: Session, user_id: int) -> Optional[User]:
-    statement = select(User).where(User.id == user_id)
-    return session.exec(statement).first()
-
-
-def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-    payload = decode_access_token(token)
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
-
-    with Session(engine) as session:
-        user = get_user_by_id(session, int(user_id))
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
-
 
 class LoginRequest(BaseModel):
     email: str
@@ -79,6 +65,7 @@ def create_user(data: UserCreate):
             school_type=data.school_type,
             admission_year=data.admission_year,
             email=data.login_id,
+            phone=data.phone,
             profile_image=data.profile_image,
             background_image=data.background_image
         )
@@ -124,35 +111,61 @@ def get_my_info(current_user: User = Depends(get_current_user)):
             birth_year=current_user.birth_year, 
             region=current_user.region, 
             school_name=current_user.school_name,
+            phone=current_user.phone,
             profile_image=current_user.profile_image,
             background_image=current_user.background_image,
             feed_images=feed_images_list
         )
 
 
+@router.get("/users/{user_id}", response_model=UserRead)
+def get_user_by_id_api(
+    user_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    특정 사용자 정보 조회 API (피드 이미지 포함)
+    """
+    with Session(engine) as session:
+        user = get_user_by_id(session, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # 해당 사용자의 게시글 이미지들 (피드용)
+        statement = (
+            select(Post)
+            .where(Post.author_id == user_id)
+            .where(Post.image_url != None)
+            .order_by(desc(Post.created_at))
+        )
+        user_posts = session.exec(statement).all()
+        feed_images_list = [post.image_url for post in user_posts if post.image_url]
+        
+        return UserRead(
+            id=user.id, 
+            name=user.name, 
+            nickname=user.nickname,
+            birth_year=user.birth_year, 
+            region=user.region, 
+            school_name=user.school_name,
+            phone=user.phone,
+            profile_image=user.profile_image,
+            background_image=user.background_image,
+            feed_images=feed_images_list
+        )
+
+
 @router.get("/users/me/recommended", response_model=list[UserRead])
 def recommended(current_user: User = Depends(get_current_user)):
+    """
+    추천 친구 목록 조회
+    - 차단/신고 필터링은 services.py 내부에서 이미 처리되어 나옵니다.
+    - 여기서는 그냥 받아서 넘겨주기만 하면 됩니다. (중복 제거됨)
+    """
     with Session(engine) as session:
-        # ✅ 차단한 사용자 ID 목록 조회
-        blocked_statement = select(UserBlock.blocked_user_id).where(
-            UserBlock.user_id == current_user.id
-        )
-        blocked_ids = set([row for row in session.exec(blocked_statement).all()])
-        
-        # ✅ 신고한 사용자 ID 목록 조회
-        reported_statement = select(UserReport.reported_user_id).where(
-            UserReport.reporter_id == current_user.id,
-            UserReport.status == "pending"
-        )
-        reported_ids = set([row for row in session.exec(reported_statement).all()])
-        
-        # ✅ 제외할 사용자 ID 합치기
-        excluded_ids = blocked_ids | reported_ids
-        
-        # 추천 친구 서비스 호출
+        # ✅ await 없이 일반 함수로 호출 (Redis 없음)
         friends = get_recommended_friends(session, current_user)
         
-        # ✅ 차단/신고한 사용자 제외
         return [
             UserRead(
                 id=u.id, 
@@ -162,7 +175,7 @@ def recommended(current_user: User = Depends(get_current_user)):
                 school_name=u.school_name,
                 profile_image=u.profile_image,
                 background_image=u.background_image
-            ) for u in friends if u.id not in excluded_ids  # ✅ 필터링 추가
+            ) for u in friends
         ]
 
 
@@ -177,7 +190,9 @@ def update_my_info(data: UserUpdate, token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
     with Session(engine) as session:
-        user = get_user_by_id(session, int(user_id))
+        # 순환 참조 방지를 위해 여기서 직접 조회하거나 get_user_by_id를 별도로 구현
+        # 여기서는 Session으로 직접 조회
+        user = session.get(User, int(user_id))
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -251,7 +266,7 @@ def get_my_notifications(current_user: User = Depends(get_current_user)):
                 id=notif.id,
                 sender_id=notif.sender_id,
                 sender_name=sender_name,
-                sender_profile_image=sender.profile_image, # 보낸 사람 프사
+                sender_profile_image=sender.profile_image, 
                 type=notif.type,
                 message=notif.message,
                 related_post_id=notif.related_post_id,
@@ -260,12 +275,11 @@ def get_my_notifications(current_user: User = Depends(get_current_user)):
             ))
             
         return notif_list
-    
+
+
 # ------------------------------------------------------
-
-# 기존 import 아래에 추가할 것 없음
-# 맨 아래나 적절한 위치에 이 함수를 추가하세요.
-
+# 🔍 유저 검색 API (신규 추가됨)
+# ------------------------------------------------------
 @router.get("/users/search", response_model=List[UserRead])
 def search_users(
     keyword: str, 
@@ -285,7 +299,7 @@ def search_users(
             )
         ).where(User.id != current_user.id)  # 나 자신은 검색 제외
         
-        # (선택) 차단한 유저 제외 로직을 여기에 추가할 수도 있습니다.
+        # 차단한 유저 제외가 필요하면 여기에 추가
         
         results = session.exec(statement).limit(20).all() # 최대 20명만
         
@@ -301,3 +315,102 @@ def search_users(
                 background_image=u.background_image
             ) for u in results
         ]
+
+@router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
+def withdraw_account(current_user: User = Depends(get_current_user)):
+    """
+    🗑️ 회원탈퇴 (계정 삭제)
+    - 사용자의 모든 활동 데이터(게시글, 댓글, 좋아요, 친구, 채팅 등)를 먼저 삭제합니다.
+    - 마지막으로 사용자 정보를 DB에서 완전히 삭제합니다.
+    - 삭제 후에는 로그인이 불가능합니다.
+    """
+    with Session(engine) as session:
+        # 현재 세션에서 유저를 다시 조회 (안전한 삭제를 위해)
+        user_in_db = session.get(User, current_user.id)
+        if not user_in_db:
+            return # 이미 삭제된 경우
+
+        user_id = user_in_db.id
+        
+        # 1. 💬 채팅 관련 데이터 삭제
+        chat_rooms = session.exec(
+            select(ChatRoom).where(
+                or_(ChatRoom.user1_id == user_id, ChatRoom.user2_id == user_id)
+            )
+        ).all()
+        
+        for room in chat_rooms:
+            # 채팅방의 모든 메시지 삭제
+            messages = session.exec(select(ChatMessage).where(ChatMessage.room_id == room.id)).all()
+            for msg in messages:
+                session.delete(msg)
+            # 채팅방 자체 삭제
+            session.delete(room)
+
+        # 2. 📝 내 게시글과 그 하위 데이터 삭제
+        my_posts = session.exec(select(Post).where(Post.author_id == user_id)).all()
+        for post in my_posts:
+            # 댓글 삭제
+            comments = session.exec(select(Comment).where(Comment.post_id == post.id)).all()
+            for comment in comments:
+                # 댓글 좋아요/신고 삭제
+                for cl in session.exec(select(CommentLike).where(CommentLike.comment_id == comment.id)).all():
+                    session.delete(cl)
+                for cr in session.exec(select(CommentReport).where(CommentReport.reported_comment_id == comment.id)).all():
+                    session.delete(cr)
+                session.delete(comment)
+            
+            # 게시글 좋아요/신고/알림 삭제
+            for pl in session.exec(select(PostLike).where(PostLike.post_id == post.id)).all():
+                session.delete(pl)
+            for pr in session.exec(select(PostReport).where(PostReport.reported_post_id == post.id)).all():
+                session.delete(pr)
+            for n in session.exec(select(Notification).where(Notification.related_post_id == post.id)).all():
+                session.delete(n)
+            
+            session.delete(post)
+
+        # 3. ✍️ 내가 쓴 댓글 삭제
+        my_comments = session.exec(select(Comment).where(Comment.user_id == user_id)).all()
+        for comment in my_comments:
+            for cl in session.exec(select(CommentLike).where(CommentLike.comment_id == comment.id)).all():
+                session.delete(cl)
+            for cr in session.exec(select(CommentReport).where(CommentReport.reported_comment_id == comment.id)).all():
+                session.delete(cr)
+            session.delete(comment)
+
+        # 4. ❤️ 기타 활동 내역 삭제 (좋아요, 신고, 차단)
+        for pl in session.exec(select(PostLike).where(PostLike.user_id == user_id)).all():
+            session.delete(pl)
+        for cl in session.exec(select(CommentLike).where(CommentLike.user_id == user_id)).all():
+            session.delete(cl)
+
+        for pr in session.exec(select(PostReport).where(PostReport.reporter_id == user_id)).all():
+            session.delete(pr)
+        for cr in session.exec(select(CommentReport).where(CommentReport.reporter_id == user_id)).all():
+            session.delete(cr)
+        
+        user_reports = session.exec(select(UserReport).where(
+            or_(UserReport.reporter_id == user_id, UserReport.reported_user_id == user_id)
+        )).all()
+        for ur in user_reports: session.delete(ur)
+
+        user_blocks = session.exec(select(UserBlock).where(
+            or_(UserBlock.user_id == user_id, UserBlock.blocked_user_id == user_id)
+        )).all()
+        for ub in user_blocks: session.delete(ub)
+
+        # 5. 🤝 친구 관계 및 알림 삭제
+        friendships = session.exec(select(UserFriendship).where(
+            or_(UserFriendship.user_id == user_id, UserFriendship.friend_user_id == user_id)
+        )).all()
+        for f in friendships: session.delete(f)
+
+        notifications = session.exec(select(Notification).where(
+            or_(Notification.receiver_id == user_id, Notification.sender_id == user_id)
+        )).all()
+        for n in notifications: session.delete(n)
+
+        # 6. 👤 [최종] 사용자 정보 삭제
+        session.delete(user_in_db)
+        session.commit()

@@ -58,6 +58,8 @@ class Post {
       authorSchool: json['author_school'],
       authorRegion: json['author_region'],
       authorProfileImage: json['author_profile_image'],
+
+      // 🔥 백엔드 키와 정확히 일치하도록 수정
       likesCount: json['like_count'] ?? 0,
       liked: json['is_liked'] ?? false,
     );

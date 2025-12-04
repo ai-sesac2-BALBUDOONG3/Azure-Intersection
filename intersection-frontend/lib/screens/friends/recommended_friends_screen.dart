@@ -16,22 +16,25 @@ class RecommendedFriendsScreen extends StatefulWidget {
 
 class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   bool _isLoading = true;
-
-  /// ApiService.getFriendRecommendationsAI() 결과:
-  /// [
-  ///   {
-  ///     "user": { ... },
-  ///     "reason": "추천 이유",
-  ///     "first_messages": ["...", "..."]
-  ///   },
-  ///   ...
-  /// ]
-  List<Map<String, dynamic>> _recommended = [];
+  List<User> _recommended = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   @override
   void initState() {
     super.initState();
     _loadRecommended();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRecommended() async {
@@ -107,201 +110,143 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   Widget build(BuildContext context) {
     final currentFriends = AppState.friends;
 
+    // 검색 필터링
+    final filteredRecommended = _searchQuery.isEmpty
+        ? _recommended
+        : _recommended
+            .where((user) =>
+                user.name.toLowerCase().contains(_searchQuery) ||
+                (user.school?.toLowerCase().contains(_searchQuery) ?? false) ||
+                (user.region?.toLowerCase().contains(_searchQuery) ?? false))
+            .toList();
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_recommended.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          Text(
-            '지역·학교·나이가 유사한 친구들을 추천해요',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // 🔍 검색바
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          SizedBox(height: 24),
-          Center(
-            child: Text(
-              '아직 추천할 친구가 없어요.\n내 정보를 더 채우고, 친구를 초대해보세요!',
-              textAlign: TextAlign.center,
+          child: TextField(
+            controller: _searchController,
+            style: const TextStyle(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: "추천 친구 검색...",
+              hintStyle: TextStyle(
+                color: Colors.grey.shade400,
+                fontSize: 15,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: Colors.grey.shade600,
+                size: 22,
+              ),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: Icon(
+                        Icons.clear,
+                        color: Colors.grey.shade600,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
             ),
           ),
-        ],
-      );
-    }
+        ),
+        const SizedBox(height: 16),
 
-    return RefreshIndicator(
-      onRefresh: _loadRecommended,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            '지역·학교·나이가 유사한 친구들을 추천해요',
-            style: TextStyle(fontSize: 13, color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
+        const Text(
+          '지역·학교·나이가 유사한 친구들을 추천해요',
+          style: TextStyle(fontSize: 13, color: Colors.grey),
+        ),
+        const SizedBox(height: 16),
 
-          ..._recommended.map((item) {
-            final userJson =
-                Map<String, dynamic>.from(item['user'] ?? <String, dynamic>{});
-            final reason = (item['reason'] ?? '') as String;
-            final firstMessages =
-                List<String>.from(item['first_messages'] ?? const []);
+        ...filteredRecommended.map((user) {
+          final isFriendAlready =
+              currentFriends.any((f) => f.id == user.id);
 
-            final user = User(
-              id: userJson['id'],
-              name: userJson['name'] ?? '',
-              birthYear: userJson['birth_year'] ?? 0,
-              region: userJson['region'] ?? '',
-              school: userJson['school_name'] ?? '',
-              profileImageUrl: userJson['profile_image'],
-              backgroundImageUrl: userJson['background_image'],
-            );
-
-            final isFriendAlready =
-                currentFriends.any((f) => f.id == user.id);
-
-            return Card(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            child: ListTile(
+              leading: const CircleAvatar(
+                child: Icon(Icons.person),
               ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => FriendProfileScreen(user: user),
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 14,
-                    horizontal: 14,
+              title: Text(user.name),
+              subtitle: Text("${user.school} · ${user.region}"),
+
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        FriendProfileScreen(user: user),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1) 상단: 프로필 + 학교/지역 + 추가 버튼
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const CircleAvatar(
-                            radius: 24,
-                            child: Icon(Icons.person, size: 26),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user.name,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "${user.school} · ${user.region}",
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          isFriendAlready
-                              ? const Icon(Icons.check_circle,
-                                  color: Colors.green, size: 22)
-                              : FilledButton(
-                                  onPressed: () => _addFriend(item),
-                                  style: FilledButton.styleFrom(
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                      horizontal: 18,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                  child: const Text('추가'),
-                                ),
-                        ],
+                );
+              },
+
+              trailing: isFriendAlready
+                  ? const Icon(Icons.check_circle,
+                      color: Colors.green, size: 22)
+                  : FilledButton(
+                      onPressed: () => _addFriend(user),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18),
                       ),
+                      child: const Text('추가'),
+                    ),
+            ),
+          );
+        }),
 
-                      const SizedBox(height: 10),
-
-                      // 2) 추천 이유
-                      if (reason.isNotEmpty) ...[
-                        const Text(
-                          "추천 이유",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          reason,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-
-                      // 3) 첫 메시지 후보
-                      if (firstMessages.isNotEmpty) ...[
-                        const Text(
-                          "첫 메시지 이렇게 시작해보세요",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        ...firstMessages.map(
-                          (msg) => Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: 4.0),
-                            child: Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "• ",
-                                  style: TextStyle(fontSize: 13),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    msg,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+        // 검색 결과 없음 안내
+        if (filteredRecommended.isEmpty && _searchQuery.isNotEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 48,
+                    color: Colors.grey.shade300,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "검색 결과가 없습니다",
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-            );
-          }).toList(),
-        ],
-      ),
+            ),
+          ),
+      ],
     );
   }
 }
