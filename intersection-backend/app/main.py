@@ -1,73 +1,96 @@
+# app/main.py
+
 import os
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from .db import create_db_and_tables
 from .config import settings
 
-# 라우터 모듈 불러오기
-from .routers import auth as auth_router
-from .routers import users as users_router
-from .routers import posts as posts_router
-from .routers import comments as comments_router
-from .routers import friends as friends_router
-from .routers import common as common_router
-from .routers import chat as chat_router
-from .routers import moderation as moderation_router
+# 라우터 모듈
+from .routers import (
+    auth as auth_router,
+    users as users_router,
+    posts as posts_router,
+    comments as comments_router,
+    friends as friends_router,
+    common as common_router,
+    chat as chat_router,
+    moderation as moderation_router,
+)
 
+# -----------------------------------------
+# 기본 설정
+# -----------------------------------------
 app = FastAPI(title="Intersection Backend")
+logger = logging.getLogger("uvicorn.error")
 
-# ✅ CORS 설정 (환경별 자동 적용)
+# -----------------------------------------
+# ✅ CORS 설정
+# -----------------------------------------
+allowed_origins = []
+
+# 1️⃣ 운영환경이면 .env 또는 Azure App Service 환경변수 사용
 if settings.ENV.lower() == "production" and settings.ALLOWED_ORIGINS:
-    # 🔒 프로덕션: 특정 도메인만 허용
-    allowed_origins_list = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    allowed_origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]
+# 2️⃣ 환경변수가 없으면 기본값 설정
 else:
-    # 🔓 개발: 모든 출처 허용
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://jolly-sand-0dcc3e60f.3.azurestaticapps.net",
+    ]
 
-# 이미지 업로드 폴더 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# -----------------------------------------
+# 파일 업로드 디렉토리
+# -----------------------------------------
 UPLOAD_DIR = "uploads"
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-
-# 🔥 [수정됨] 정적 파일 서빙 경로를 '/static'으로 변경
-# 기존: app.mount("/uploads", ...) -> 수정: app.mount("/static", ...)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
-
+# -----------------------------------------
+# Startup 이벤트: DB 초기화
+# -----------------------------------------
 @app.on_event("startup")
 def on_startup():
-    # DB 테이블 생성
-    create_db_and_tables()
+    try:
+        create_db_and_tables()
+        logger.info("✅ Database initialized successfully.")
+    except Exception as e:
+        logger.error(f"⚠️ Database initialization skipped or failed: {e}")
 
-
+# -----------------------------------------
 # 라우터 등록
-app.include_router(auth_router.router)
-app.include_router(users_router.router)
-app.include_router(posts_router.router)
-app.include_router(comments_router.router)
-app.include_router(friends_router.router)
-app.include_router(common_router.router)
-app.include_router(chat_router.router)
-app.include_router(moderation_router.router)
+# -----------------------------------------
+try:
+    app.include_router(auth_router.router)
+    app.include_router(users_router.router)
+    app.include_router(posts_router.router)
+    app.include_router(comments_router.router)
+    app.include_router(friends_router.router)
+    app.include_router(common_router.router)
+    app.include_router(chat_router.router)
+    app.include_router(moderation_router.router)
+except Exception as e:
+    logger.error(f"🚫 Router import failed: {e}")
 
-
+# -----------------------------------------
+# 헬스체크
+# -----------------------------------------
 @app.get("/")
 def root():
     return {
         "message": "Intersection backend running",
-        "env": settings.ENV
+        "env": settings.ENV,
+        "allowed_origins": allowed_origins,
     }
