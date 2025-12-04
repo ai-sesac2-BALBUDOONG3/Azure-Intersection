@@ -509,6 +509,29 @@ class ApiService {
     return response.statusCode == 200 || response.statusCode == 204;
   }
 
+  // ✅ 댓글 수정 (로컬 최종 구현 맞춰 추가)
+  static Future<Map<String, dynamic>> updateComment(
+    int postId,
+    int commentId,
+    String newContent,
+  ) async {
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/posts/$postId/comments/$commentId",
+    );
+
+    final response = await http.put(
+      url,
+      headers: _headers(),
+      body: jsonEncode({"content": newContent}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception("댓글 수정 실패: ${response.body}");
+  }
+
   // ----------------------------------------------------
   // ❤️ 댓글 좋아요 토글 (ON/OFF 통합)
   // ----------------------------------------------------

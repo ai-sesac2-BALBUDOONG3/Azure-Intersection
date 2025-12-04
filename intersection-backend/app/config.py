@@ -1,83 +1,84 @@
-# 파일 경로: intersection-backend/app/config.py
+import os
+from functools import lru_cache
+from typing import List
 
+# ✅ .env 자동 로드 (python-dotenv 없어도 안전하게 패스)
 try:
-    # pydantic v2: BaseSettings는 pydantic-settings로 분리됨
-    from pydantic_settings import BaseSettings
+    from dotenv import load_dotenv
+    load_dotenv()
 except Exception:
-    # pydantic v1 호환용 fallback
-    from pydantic import BaseSettings
+    pass
 
 
-class Settings(BaseSettings):
-    # =========================
-    # 기본 환경 설정
-    # =========================
-    # 예: "development", "production", "prod", "staging" 등
-    ENV: str = "development"
-    
-    # =========================
-    # Kakao OAuth
-    # =========================
-    KAKAO_CLIENT_ID: str | None = None
-    KAKAO_CLIENT_SECRET: str | None = None
-    KAKAO_REDIRECT_URI: str = "http://127.0.0.1:8000/auth/kakao/callback"
-    
-    # =========================
-    # JWT
-    # =========================
-    # ❗ 여기서는 기본값을 두지 않고, 아래에서 ENV에 따라 강제 처리
-    JWT_SECRET: str | None = None
-    
-    # =========================
-    # Database
-    # =========================
-    # 로컬 기본값 (운영에서는 반드시 .env 또는 App Service 설정으로 override)
-    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/intersection"
-    
-    # =========================
-    # CORS (프로덕션용)
-    # =========================
-    # 예: "https://app.example.com,https://admin.example.com"
-    ALLOWED_ORIGINS: str | None = None
+class Settings:
+    """Pydantic 없이 환경 변수 기반 설정"""
 
-    # =========================
-    # Azure OpenAI
-    # =========================
-    AZURE_OPENAI_ENDPOINT: str | None = None
-    AZURE_OPENAI_API_KEY: str | None = None
-    # 포털에 적힌 api-version 사용. 지금은 2025-01-01-preview 기준.
-    AZURE_OPENAI_API_VERSION: str = "2025-01-01-preview"
-    # 예: gpt-4o-mini
-    AZURE_OPENAI_CHAT_DEPLOYMENT: str | None = None
+    def __init__(self):
+        # 기본 환경
+        self.ENV: str = os.getenv("ENV", "development")
 
-    class Config:
-        env_file = ".env"
-        # Pydantic v2에서 정의되지 않은 필드가 들어와도 무시
-        extra = "ignore"
-
-
-settings = Settings()
-
-# =========================
-# ENV / JWT_SECRET 후처리
-# =========================
-
-# 운영 환경으로 취급할 ENV 값들 (필요하면 추가)
-_PRODUCTION_ENVS = {"production", "prod"}
-
-env_lower = (settings.ENV or "").lower()
-
-if env_lower in _PRODUCTION_ENVS:
-    # 🔒 운영에서는 반드시 강력한 JWT_SECRET이 설정되어 있어야 함
-    if not settings.JWT_SECRET or settings.JWT_SECRET == "dev-secret-for-local-testing":
-        # 여기서 바로 예외를 발생시켜 서버가 기동되지 않도록 막는다.
-        raise RuntimeError(
-            "JWT_SECRET must be set to a strong value in production. "
-            "현재 ENV=production/prod 이지만 JWT_SECRET이 비어 있거나 "
-            "'dev-secret-for-local-testing' 값으로 설정되어 있습니다. "
-            "App Service 구성 또는 .env 파일을 확인하세요."
+        # JWT 설정
+        self.JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-for-local-testing")
+        self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
         )
-else:
-    # 🧪 개발/테스트 환경에서는 JWT_SECRET이 없으면 dev용 시크릿을 자동으로 사용
-    if not settings.JWT_SECRET:
-        settings.JWT_SECRET = "dev-secret-for-local-testing"
+
+        # DB 연결
+        self.DATABASE_URL: str = os.getenv(
+            "DATABASE_URL", "sqlite:///./intersection_dev.db"
+        )
+
+        # CORS 허용 도메인
+        self.ALLOWED_ORIGINS: str = os.getenv(
+            "ALLOWED_ORIGINS",
+            "http://localhost:3000,http://localhost:5173,https://jolly-sand-0dcc3e60f.3.azurestaticapps.net",
+        )
+
+        # Azure OpenAI
+        self.AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+        self.AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
+        self.AZURE_OPENAI_API_VERSION: str = os.getenv(
+            "AZURE_OPENAI_API_VERSION", "2024-06-01"
+        )
+        self.AZURE_OPENAI_CHAT_DEPLOYMENT: str = os.getenv(
+            "AZURE_OPENAI_CHAT_DEPLOYMENT", ""
+        )
+        self.AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = os.getenv(
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT", ""
+        )
+
+        # Kakao OAuth
+        self.KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
+        self.KAKAO_CLIENT_SECRET: str = os.getenv("KAKAO_CLIENT_SECRET", "")
+        self.KAKAO_REDIRECT_URI: str = os.getenv(
+            "KAKAO_REDIRECT_URI", "http://127.0.0.1:8000/auth/kakao/callback"
+        )
+
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        """ALLOWED_ORIGINS를 리스트로 변환"""
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()
+
+# 🔒 운영 환경 검증
+if settings.ENV.lower() in {"production", "prod"}:
+    if (
+        not settings.JWT_SECRET
+        or settings.JWT_SECRET == "dev-secret-for-local-testing"
+    ):
+        raise RuntimeError(
+            "⚠️ ENV=production인데 JWT_SECRET이 설정되지 않았습니다. "
+            "App Service 환경변수를 확인하세요."
+        )
+    if settings.DATABASE_URL.startswith("sqlite"):
+        raise RuntimeError(
+            "⚠️ ENV=production인데 DATABASE_URL이 SQLite입니다. "
+            "Azure Database for PostgreSQL 연결 문자열을 설정하세요."
+        )
