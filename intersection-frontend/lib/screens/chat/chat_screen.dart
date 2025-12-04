@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/chat_message.dart';
 import '../../services/api_service.dart';
@@ -542,8 +543,163 @@ class _ChatScreenState extends State<ChatScreen> {
   // 메시지 말풍선 + 시간
   // ================================
   Widget _buildMessageBubble(ChatMessage message) {
+    // 디버깅용 로그 (원하지 않으면 주석 처리)
+    debugPrint("=== 메시지 디버그 ===");
+    debugPrint("ID: ${message.id}");
+    debugPrint("Content: ${message.content}");
+    debugPrint("MessageType: ${message.messageType}");
+    debugPrint("FileUrl: ${message.fileUrl}");
+    debugPrint("FileName: ${message.fileName}");
+    debugPrint("FileType: ${message.fileType}");
+    debugPrint("isImage: ${message.isImage}");
+    debugPrint("==================");
+
     final isMe = message.senderId == AppState.currentUser?.id;
     final time = _formatTime(message.createdAt);
+
+    // 1) 시스템 메시지 (입장/퇴장, 안내 등)
+    if (message.messageType == "system") {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  message.content,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final bubbleColor = isMe ? Colors.blue : Colors.grey.shade200;
+
+    // 2) 말풍선 내부 컨텐츠 (텍스트 / 이미지 / 파일)
+    Widget contentWidget;
+
+    // 2-1) 이미지 메시지
+    if (message.isImage && message.fileUrl != null) {
+      contentWidget = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () {
+              if (message.fileUrl != null) {
+                _openUrl(message.fileUrl!);
+              }
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                message.fileUrl!,
+                width: 220,
+                height: 220,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 220,
+                  height: 220,
+                  color: Colors.grey.shade300,
+                  child: const Icon(Icons.broken_image, size: 48),
+                ),
+                loadingBuilder: (_, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: 220,
+                    height: 220,
+                    color: Colors.grey.shade300,
+                    child: const Center(child: CircularProgressIndicator()),
+                  );
+                },
+              ),
+            ),
+          ),
+          if (message.content.isNotEmpty && message.content != "[이미지]") ...[
+            const SizedBox(height: 6),
+            Text(
+              message.content,
+              style: TextStyle(
+                fontSize: 14,
+                color: isMe ? Colors.white : Colors.black87,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+    // 2-2) 파일 메시지
+    else if (message.messageType == "file" && message.fileUrl != null) {
+      contentWidget = InkWell(
+        onTap: () {
+          _openUrl(message.fileUrl!);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.insert_drive_file,
+              color: isMe ? Colors.white : Colors.blue,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.fileName ?? "파일",
+                    style: TextStyle(
+                      color: isMe ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (message.fileSize != null)
+                    Text(
+                      message.fileSizeFormatted,
+                      style: TextStyle(
+                        color: isMe ? Colors.white70 : Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.download,
+              color: isMe ? Colors.white : Colors.blue,
+              size: 18,
+            ),
+          ],
+        ),
+      );
+    }
+    // 2-3) 일반 텍스트 메시지
+    else {
+      contentWidget = Text(
+        message.content,
+        style: TextStyle(
+          fontSize: 15,
+          color: isMe ? Colors.white : Colors.black87,
+          height: 1.4,
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -586,7 +742,7 @@ class _ChatScreenState extends State<ChatScreen> {
               maxWidth: MediaQuery.of(context).size.width * 0.65,
             ),
             decoration: BoxDecoration(
-              color: isMe ? Colors.blue : Colors.grey.shade200,
+              color: bubbleColor,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(20),
                 topRight: const Radius.circular(20),
@@ -596,14 +752,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     isMe ? const Radius.circular(4) : const Radius.circular(20),
               ),
             ),
-            child: Text(
-              message.content,
-              style: TextStyle(
-                fontSize: 15,
-                color: isMe ? Colors.white : Colors.black87,
-                height: 1.4,
-              ),
-            ),
+            child: contentWidget,
           ),
 
           // 상대방 메시지: 시간만 오른쪽
@@ -621,6 +770,28 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (!await canLaunchUrl(uri)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('링크를 열 수 없습니다.')),
+        );
+        return;
+      }
+      await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+      );
+    } catch (e) {
+      debugPrint("링크 열기 오류: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('링크 열기 실패: $e')),
+      );
+    }
   }
 
   // ✅ 한국 시간 기준 HH:mm 표시

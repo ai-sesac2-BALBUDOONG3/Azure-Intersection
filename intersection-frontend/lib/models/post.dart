@@ -1,3 +1,5 @@
+// lib/models/post.dart
+
 class Post {
   final int id;
   final int authorId;
@@ -9,6 +11,7 @@ class Post {
   final String? authorName;
   final String? authorSchool;
   final String? authorRegion;
+  final String? authorProfileImage;
 
   // 좋아요 정보
   int likesCount;
@@ -18,13 +21,12 @@ class Post {
     required this.id,
     required this.authorId,
     required this.content,
-    this.mediaUrls = const [],
+    required this.mediaUrls,
     required this.createdAt,
-
     this.authorName,
     this.authorSchool,
     this.authorRegion,
-
+    this.authorProfileImage,
     this.likesCount = 0,
     this.liked = false,
   });
@@ -52,12 +54,10 @@ class Post {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at']) ?? DateTime.now()
           : DateTime.now(),
-
       authorName: json['author_name'],
       authorSchool: json['author_school'],
       authorRegion: json['author_region'],
-
-      // 🔥 백엔드 키와 정확히 일치하도록 수정
+      authorProfileImage: json['author_profile_image'],
       likesCount: json['like_count'] ?? 0,
       liked: json['is_liked'] ?? false,
     );

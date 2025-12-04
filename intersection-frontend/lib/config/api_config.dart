@@ -1,4 +1,4 @@
-// intersection-frontend/lib/config/api_config.dart
+// lib/config/api_config.dart
 
 import 'package:flutter/foundation.dart';
 
@@ -9,13 +9,11 @@ enum AppEnvironment {
 }
 
 class ApiConfig {
-  /// 빌드 시점에 넘기는 환경 값
-  /// flutter build ... --dart-define=APP_ENV=dev|prod
+  /// flutter build/run 시 넘기는 ENV (없으면 기본 prod)
   static const String _envString =
-      String.fromEnvironment('APP_ENV', defaultValue: 'dev');
+      String.fromEnvironment('APP_ENV', defaultValue: 'prod');
 
-  /// API_BASE_URL을 직접 지정할 수 있는 옵션
-  /// flutter build ... --dart-define=API_BASE_URL=...
+  /// 필요하면 API_BASE_URL로 완전히 덮어쓸 수 있는 옵션
   static const String _overrideBaseUrl =
       String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
@@ -31,27 +29,31 @@ class ApiConfig {
     }
   }
 
+  /// ✅ 실제 사용하는 Azure App Service 주소 (운영)
+  static const String _azureBaseUrl =
+      'https://intersection-api-balbudoong-dvaefbfhbychg9dc.canadacentral-01.azurewebsites.net';
+
   /// 최종 API Base URL
   static String get baseUrl {
-    // 1순위: 명시적으로 dart-define으로 지정한 값
+    // 1순위: dart-define 으로 직접 지정한 값
     if (_overrideBaseUrl.isNotEmpty) {
       return _overrideBaseUrl;
     }
 
-    // 2순위: 환경별 기본값
+    // 2순위: 환경값 (지금은 dev/prod 모두 Azure로 통일)
     switch (environment) {
       case AppEnvironment.dev:
-        // 로컬 FastAPI
-        return 'http://127.0.0.1:8000';
+        // 🟦 개발 환경도 Azure 운영 API 사용
+        return _azureBaseUrl;
       case AppEnvironment.prod:
-        // Azure App Service 운영 API
-        return 'https://intersection-api-balbudoong-main-ezeqgpdwehcfcvbm.canadacentral-01.azurewebsites.net';
+        // 🟥 운영 환경 역시 동일한 Azure 운영 API 사용
+        return _azureBaseUrl;
     }
   }
 
   static bool get isProd => environment == AppEnvironment.prod;
 
-  /// 로그 출력 여부 등
+  /// 비운영일 때만 로그 활성화 (지금은 dev/prod 둘 다 Azure지만, dev일 땐 로그 ON)
   static bool get enableLogging => !isProd;
 
   /// 디버깅용: 현재 설정 로그
