@@ -1,6 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlmodel import Session, select, func, desc, or_
-from typing import List, Optional
+# 🔥 [수정] List가 추가되었습니다.
+from typing import List, Optional 
+import shutil
+import uuid
+import os
+
 from ..db import engine
 from ..models import (
     User, Post, PostLike, Comment, CommentLike, 
@@ -8,20 +13,46 @@ from ..models import (
 )
 from ..dependencies import get_current_user
 from ..schemas import PostRead, PostCreate, PostReportRead, PostReportCreate
-from .common import upload_file
 
 router = APIRouter(tags=["posts"])
 
 # -------------------------------------------------------
-# 📝 게시글 작성
+# 📝 게시글 작성 (이미지 업로드 포함) - 수정됨
 # -------------------------------------------------------
 @router.post("/users/me/posts/", response_model=PostRead)
-def create_post(payload: PostCreate, current_user: User = Depends(get_current_user)):
+async def create_post(
+    content: str = Form(...),                    # 텍스트 내용 (Form)
+    file: Optional[UploadFile] = File(None),     # 이미지 파일 (File)
+    current_user: User = Depends(get_current_user)
+):
+    image_url = None
+
+    # 1. 이미지 파일이 있으면 서버(uploads 폴더)에 저장
+    if file:
+        # 폴더 없으면 생성
+        UPLOAD_DIR = "uploads"
+        if not os.path.exists(UPLOAD_DIR):
+            os.makedirs(UPLOAD_DIR)
+
+        # 파일명 중복 방지를 위한 UUID 사용
+        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        filename = f"{uuid.uuid4()}.{ext}"
+        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        # 파일 쓰기
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # DB에 저장될 접근 URL (/static/...)
+        # main.py에서 app.mount("/static", StaticFiles(directory="uploads")) 설정 필수
+        image_url = f"/static/{filename}"
+
+    # 2. 게시글 정보 DB 저장
     with Session(engine) as session:
         post = Post(
             author_id=current_user.id, 
-            content=payload.content, 
-            image_url=payload.image_url
+            content=content, 
+            image_url=image_url
         )
         session.add(post)
         session.commit()
@@ -34,12 +65,12 @@ def create_post(payload: PostCreate, current_user: User = Depends(get_current_us
             image_url=post.image_url,
             created_at=post.created_at.isoformat(),
             author_name=current_user.name,
-            author_nickname=current_user.nickname, # 닉네임 추가
-            author_profile_image=current_user.profile_image, # 프로필 이미지 추가
+            author_nickname=current_user.nickname,
+            author_profile_image=current_user.profile_image,
             author_school=current_user.school_name,
             author_region=current_user.region,
             like_count=0,
-            comment_count=0, # 새 글은 댓글 0개
+            comment_count=0,
             is_liked=False
         )
 
@@ -104,7 +135,7 @@ def list_posts(
             # ❤️ 좋아요 수 계산
             like_count = session.exec(select(func.count(PostLike.id)).where(PostLike.post_id == post.id)).one()
             
-            # 💬 댓글 수 계산 (추가됨)
+            # 💬 댓글 수 계산
             comment_count = session.exec(select(func.count(Comment.id)).where(Comment.post_id == post.id)).one()
 
             # ❤️ 내가 좋아요 눌렀는지 확인
@@ -128,7 +159,7 @@ def list_posts(
                 author_school=user.school_name,
                 author_region=user.region,
                 like_count=like_count,
-                comment_count=comment_count, # 반환값에 포함
+                comment_count=comment_count,
                 is_liked=is_liked
             ))
         return post_reads
@@ -230,13 +261,10 @@ def update_post(post_id: int, payload: PostCreate, current_user: User = Depends(
         )
 
 # -------------------------------------------------------
-# 🗑️ 게시글 삭제 (강력한 버전)
+# 🗑️ 게시글 삭제
 # -------------------------------------------------------
 @router.delete("/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
-    """
-    게시글 삭제: 연관된 댓글, 좋아요, 신고, 알림을 모두 제거하고 본문 삭제
-    """
     with Session(engine) as session:
         post = session.get(Post, post_id)
         
@@ -245,7 +273,7 @@ def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
         if post.author_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not post author")
             
-        # 1. 댓글 및 댓글의 하위 데이터(좋아요, 신고) 삭제
+        # 1. 댓글 및 댓글의 하위 데이터 삭제
         comments = session.exec(select(Comment).where(Comment.post_id == post_id)).all()
         for comment in comments:
             # 댓글 좋아요
@@ -275,7 +303,7 @@ def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
         return None
 
 # -------------------------------------------------------
-# ❤️ 게시글 좋아요 (알림 기능 포함)
+# ❤️ 게시글 좋아요
 # -------------------------------------------------------
 @router.post("/posts/{post_id}/like")
 def like_post(post_id: int, current_user: User = Depends(get_current_user)):
