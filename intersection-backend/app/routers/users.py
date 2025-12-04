@@ -6,36 +6,22 @@ from sqlalchemy import or_
 
 # 🔥 스키마 및 모델 임포트
 from ..schemas import UserCreate, UserRead, UserUpdate, Token, NotificationRead
-from ..models import User, Post, Notification, UserBlock, UserReport
+from ..models import (
+    User, Post, Comment, UserFriendship, ChatRoom, ChatMessage, 
+    UserBlock, UserReport, PostLike, CommentLike, PostReport, 
+    CommentReport, Notification
+)
 from ..db import engine
 from ..auth import get_password_hash, verify_password, create_access_token, decode_access_token
 from fastapi.security import OAuth2PasswordBearer
 from ..services import assign_community, get_recommended_friends
 
+# 🔥 [핵심 수정] 순환 참조 해결을 위해 dependencies에서 가져옴
+from ..dependencies import get_current_user
+
 router = APIRouter(tags=["users"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
-
-
-def get_user_by_id(session: Session, user_id: int) -> Optional[User]:
-    statement = select(User).where(User.id == user_id)
-    return session.exec(statement).first()
-
-
-def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
-    payload = decode_access_token(token)
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
-
-    with Session(engine) as session:
-        user = get_user_by_id(session, int(user_id))
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
-
 
 class LoginRequest(BaseModel):
     email: str
@@ -203,7 +189,9 @@ def update_my_info(data: UserUpdate, token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
     with Session(engine) as session:
-        user = get_user_by_id(session, int(user_id))
+        # 순환 참조 방지를 위해 여기서 직접 조회하거나 get_user_by_id를 별도로 구현
+        # 여기서는 Session으로 직접 조회
+        user = session.get(User, int(user_id))
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -326,3 +314,102 @@ def search_users(
                 background_image=u.background_image
             ) for u in results
         ]
+
+@router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
+def withdraw_account(current_user: User = Depends(get_current_user)):
+    """
+    🗑️ 회원탈퇴 (계정 삭제)
+    - 사용자의 모든 활동 데이터(게시글, 댓글, 좋아요, 친구, 채팅 등)를 먼저 삭제합니다.
+    - 마지막으로 사용자 정보를 DB에서 완전히 삭제합니다.
+    - 삭제 후에는 로그인이 불가능합니다.
+    """
+    with Session(engine) as session:
+        # 현재 세션에서 유저를 다시 조회 (안전한 삭제를 위해)
+        user_in_db = session.get(User, current_user.id)
+        if not user_in_db:
+            return # 이미 삭제된 경우
+
+        user_id = user_in_db.id
+        
+        # 1. 💬 채팅 관련 데이터 삭제
+        chat_rooms = session.exec(
+            select(ChatRoom).where(
+                or_(ChatRoom.user1_id == user_id, ChatRoom.user2_id == user_id)
+            )
+        ).all()
+        
+        for room in chat_rooms:
+            # 채팅방의 모든 메시지 삭제
+            messages = session.exec(select(ChatMessage).where(ChatMessage.room_id == room.id)).all()
+            for msg in messages:
+                session.delete(msg)
+            # 채팅방 자체 삭제
+            session.delete(room)
+
+        # 2. 📝 내 게시글과 그 하위 데이터 삭제
+        my_posts = session.exec(select(Post).where(Post.author_id == user_id)).all()
+        for post in my_posts:
+            # 댓글 삭제
+            comments = session.exec(select(Comment).where(Comment.post_id == post.id)).all()
+            for comment in comments:
+                # 댓글 좋아요/신고 삭제
+                for cl in session.exec(select(CommentLike).where(CommentLike.comment_id == comment.id)).all():
+                    session.delete(cl)
+                for cr in session.exec(select(CommentReport).where(CommentReport.reported_comment_id == comment.id)).all():
+                    session.delete(cr)
+                session.delete(comment)
+            
+            # 게시글 좋아요/신고/알림 삭제
+            for pl in session.exec(select(PostLike).where(PostLike.post_id == post.id)).all():
+                session.delete(pl)
+            for pr in session.exec(select(PostReport).where(PostReport.reported_post_id == post.id)).all():
+                session.delete(pr)
+            for n in session.exec(select(Notification).where(Notification.related_post_id == post.id)).all():
+                session.delete(n)
+            
+            session.delete(post)
+
+        # 3. ✍️ 내가 쓴 댓글 삭제
+        my_comments = session.exec(select(Comment).where(Comment.user_id == user_id)).all()
+        for comment in my_comments:
+            for cl in session.exec(select(CommentLike).where(CommentLike.comment_id == comment.id)).all():
+                session.delete(cl)
+            for cr in session.exec(select(CommentReport).where(CommentReport.reported_comment_id == comment.id)).all():
+                session.delete(cr)
+            session.delete(comment)
+
+        # 4. ❤️ 기타 활동 내역 삭제 (좋아요, 신고, 차단)
+        for pl in session.exec(select(PostLike).where(PostLike.user_id == user_id)).all():
+            session.delete(pl)
+        for cl in session.exec(select(CommentLike).where(CommentLike.user_id == user_id)).all():
+            session.delete(cl)
+
+        for pr in session.exec(select(PostReport).where(PostReport.reporter_id == user_id)).all():
+            session.delete(pr)
+        for cr in session.exec(select(CommentReport).where(CommentReport.reporter_id == user_id)).all():
+            session.delete(cr)
+        
+        user_reports = session.exec(select(UserReport).where(
+            or_(UserReport.reporter_id == user_id, UserReport.reported_user_id == user_id)
+        )).all()
+        for ur in user_reports: session.delete(ur)
+
+        user_blocks = session.exec(select(UserBlock).where(
+            or_(UserBlock.user_id == user_id, UserBlock.blocked_user_id == user_id)
+        )).all()
+        for ub in user_blocks: session.delete(ub)
+
+        # 5. 🤝 친구 관계 및 알림 삭제
+        friendships = session.exec(select(UserFriendship).where(
+            or_(UserFriendship.user_id == user_id, UserFriendship.friend_user_id == user_id)
+        )).all()
+        for f in friendships: session.delete(f)
+
+        notifications = session.exec(select(Notification).where(
+            or_(Notification.receiver_id == user_id, Notification.sender_id == user_id)
+        )).all()
+        for n in notifications: session.delete(n)
+
+        # 6. 👤 [최종] 사용자 정보 삭제
+        session.delete(user_in_db)
+        session.commit()

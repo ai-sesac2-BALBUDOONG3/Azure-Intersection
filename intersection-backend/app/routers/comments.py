@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from sqlmodel import Session, select, func
+from sqlalchemy import or_ # or_ 임포트 추가 (불필요하지만 혹시 모르니)
 from ..db import engine
-# 👇 CommentLike 추가됨
 from ..models import Comment, Post, User, CommentReport, Notification, CommentLike
 from ..schemas import (
     CommentCreate, 
@@ -11,12 +11,17 @@ from ..schemas import (
     CommentReportCreate, 
     CommentReportRead
 )
-from ..routers.users import get_current_user
+# 🔥 [수정 완료] 순환 참조 해결: users 라우터 대신 dependencies에서 가져옴
+from ..dependencies import get_current_user
 
 router = APIRouter(tags=["comments"])
 
 @router.post("/posts/{post_id}/comments", response_model=CommentRead)
 def create_comment(post_id: int, payload: CommentCreate, current_user: User = Depends(get_current_user)):
+    """
+    댓글 생성 API
+    - CommentRead 반환 시 작성자의 실명/닉네임과 프로필 이미지를 포함합니다.
+    """
     with Session(engine) as session:
         statement = select(Post).where(Post.id == post_id)
         post = session.exec(statement).first()
@@ -31,7 +36,6 @@ def create_comment(post_id: int, payload: CommentCreate, current_user: User = De
         # 🔔 알림 생성 (작성자가 본인이 아닐 경우)
         if post.author_id != current_user.id:
             sender_name = current_user.name or current_user.nickname or "알 수 없음"
-            # 중복 알림 방지 (선택 사항)
             notif = Notification(
                 receiver_id=post.author_id,
                 sender_id=current_user.id,
@@ -42,6 +46,7 @@ def create_comment(post_id: int, payload: CommentCreate, current_user: User = De
             session.add(notif)
             session.commit()
         
+        # 🔥 [실명 표시 최종 확인] 프론트엔드가 요구하는 author_name 필드에 실명/닉네임 설정
         display_name = current_user.name or current_user.nickname or current_user.login_id
         
         return CommentRead(
@@ -49,18 +54,24 @@ def create_comment(post_id: int, payload: CommentCreate, current_user: User = De
             post_id=comment.post_id, 
             user_id=comment.user_id, 
             content=comment.content, 
-            user_name=display_name,
-            author_profile_image=current_user.profile_image, # 🔥 프로필 이미지 추가
+            # user_name과 author_name을 모두 채워 프론트엔드 모델의 어떤 필드를 쓰든 대응
+            user_name=display_name, 
+            author_name=display_name, 
+            author_profile_image=current_user.profile_image, 
             created_at=comment.created_at.isoformat(),
-            likes_count=0,    # 초기값 0
-            liked=False   # 초기값 False
+            likes_count=0,
+            liked=False
         )
 
 @router.get("/posts/{post_id}/comments", response_model=List[CommentRead])
 def list_comments(
     post_id: int,
-    current_user: Optional[User] = Depends(get_current_user) # 🔥 좋아요 여부 확인을 위해 current_user 필요
+    current_user: Optional[User] = Depends(get_current_user)
 ):
+    """
+    댓글 목록 조회 API
+    - 댓글 작성자의 실명/닉네임, 좋아요 수, 좋아요 여부를 포함합니다.
+    """
     with Session(engine) as session:
         statement = (
             select(Comment, User)
@@ -72,7 +83,8 @@ def list_comments(
         
         comments_list = []
         for comment, user in results:
-            display_name = user.name or user.nickname or user.login_id or "알 수 없음"
+            # 🔥 [실명 표시 최종 확인] user_name/author_name에 실명(name)을 우선적으로 사용
+            display_name = user.name or user.nickname or user.login_id or "익명"
             
             # ❤️ 좋아요 수 계산
             like_count = session.exec(
@@ -97,10 +109,11 @@ def list_comments(
                 user_id=comment.user_id, 
                 content=comment.content, 
                 user_name=display_name, 
-                author_profile_image=user.profile_image, # 🔥 프로필 이미지 추가
+                author_name=display_name, # 🔥 프론트엔드 스키마 불일치 해결
+                author_profile_image=user.profile_image, 
                 created_at=comment.created_at.isoformat(),
-                likes_count=like_count, # 🔥 좋아요 수
-                liked=is_liked      # 🔥 좋아요 여부
+                likes_count=like_count, 
+                liked=is_liked      
             ))
 
         return comments_list
@@ -145,7 +158,8 @@ def update_comment(
             user_id=comment.user_id,
             content=comment.content,
             user_name=display_name,
-            author_profile_image=current_user.profile_image, # 🔥 프로필 이미지
+            author_name=display_name, # 🔥 프론트엔드 스키마 불일치 해결
+            author_profile_image=current_user.profile_image,
             created_at=comment.created_at.isoformat(),
             likes_count=like_count,
             liked=is_liked
@@ -157,49 +171,66 @@ def delete_comment(
     comment_id: int, 
     current_user: User = Depends(get_current_user)
 ):
+    """
+    댓글 삭제 API
+    - 본인 댓글만 삭제 가능하며, 연관된 좋아요 데이터를 함께 삭제합니다.
+    """
     with Session(engine) as session:
+        # 🔥 [핵심 수정] 댓글 객체를 DB에서 가져옵니다. (session.get 사용)
         comment = session.get(Comment, comment_id)
         if not comment:
             raise HTTPException(status_code=404, detail="Comment not found")
             
+        # 권한 확인
         if comment.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Not authorized to delete this comment")
             
-        # 🔥 좋아요 데이터도 함께 삭제 (FK 오류 방지)
-        session.exec(select(CommentLike).where(CommentLike.comment_id == comment_id)).all()
-        # Cascade 설정에 따라 자동 삭제될 수도 있지만 명시적 삭제 권장
-        
+        # 좋아요 데이터도 함께 삭제 (FK 오류 방지)
+        for like in session.exec(select(CommentLike).where(CommentLike.comment_id == comment_id)).all():
+             session.delete(like)
+
         session.delete(comment)
         session.commit()
         return {"ok": True}
 
 # ------------------------------------------------------
-# ❤️ [추가] 댓글 좋아요 기능
+# ❤️ 댓글 좋아요 기능 (토글)
 # ------------------------------------------------------
 @router.post("/comments/{comment_id}/like")
-def like_comment(comment_id: int, current_user: User = Depends(get_current_user)):
+def toggle_comment_like(
+    comment_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """댓글 좋아요 토글 (ON/OFF)"""
     with Session(engine) as session:
+        # 댓글 존재 확인
         comment = session.get(Comment, comment_id)
         if not comment:
             raise HTTPException(status_code=404, detail="Comment not found")
 
+        # 이미 좋아요 눌렀는지 확인
         existing_like = session.exec(
             select(CommentLike).where(
-                CommentLike.comment_id == comment_id, 
-                CommentLike.user_id == current_user.id
+                CommentLike.user_id == current_user.id,
+                CommentLike.comment_id == comment_id
             )
         ).first()
 
         if existing_like:
-            return {"ok": True} # 이미 좋아요 상태
-
-        new_like = CommentLike(user_id=current_user.id, comment_id=comment_id)
-        session.add(new_like)
+            session.delete(existing_like)
+            is_liked = False
+        else:
+            new_like = CommentLike(user_id=current_user.id, comment_id=comment_id)
+            session.add(new_like)
+            is_liked = True
+        
         session.commit()
         
-        # (선택 사항) 댓글 좋아요 알림도 필요하다면 여기에 추가
-        
-        return {"ok": True}
+        like_count = session.exec(
+            select(func.count(CommentLike.id)).where(CommentLike.comment_id == comment_id)
+        ).one()
+
+        return {"is_liked": is_liked, "like_count": like_count}
 
 @router.delete("/comments/{comment_id}/like")
 def unlike_comment(comment_id: int, current_user: User = Depends(get_current_user)):
@@ -227,6 +258,7 @@ def report_comment(
     report_data: CommentReportCreate,
     current_user: User = Depends(get_current_user)
 ):
+    """댓글 신고 API (게시글 ID는 편의상 경로에 포함)"""
     with Session(engine) as session:
         comment = session.get(Comment, comment_id)
         if not comment:
