@@ -40,7 +40,42 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      throw Exception("회원가입 실패: ${response.body}");
+      
+// 1. 에러 응답 본문 해독 (한글 깨짐 방지 utf8.decode 사용)
+      final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+      final errorMessage = errorBody['detail'] ?? '';
+
+      // 2. "이미 존재하는 아이디" 에러인지 확인
+      if (errorMessage == "login_id already exists") {
+        // 팝업창에 띄우고 싶은 문구로 변경하세요 👇
+        throw Exception("이미 가입된 이메일입니다.\n로그인하거나 다른 이메일을 사용해주세요.");
+      }
+
+      // 3. 그 외 다른 에러인 경우
+      throw Exception("회원가입 실패: $errorMessage");
+    }
+  }
+
+// ----------------------------------------------------
+  // 🏫 학교 검색 (자동완성용)
+  // ----------------------------------------------------
+  static Future<List<String>> searchSchools(String keyword) async {
+    if (keyword.isEmpty) return [];
+
+    final url = Uri.parse(
+        "${ApiConfig.baseUrl}/common/search/schools?keyword=$keyword");
+
+    final response = await http.get(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> list = jsonDecode(utf8.decode(response.bodyBytes));
+      return list.map((e) => e.toString()).toList();
+    } else {
+      // 에러 시 빈 리스트 반환 (조용히 처리)
+      return [];
     }
   }
 
@@ -77,9 +112,46 @@ class ApiService {
       return User(
         id: data["id"],
         name: data["name"] ?? "",
+        nickname: data["nickname"],
         birthYear: data["birth_year"] ?? 0,
+        gender: data["gender"],
         region: data["region"] ?? "",
         school: data["school_name"] ?? "",
+        schoolType: data["school_type"],
+        admissionYear: data["admission_year"],
+        phone: data["phone"],
+        profileImageUrl: data["profile_image"],
+        backgroundImageUrl: data["background_image"],
+        profileFeedImages: (data["feed_images"] != null)
+        ? List<String>.from(data["feed_images"])
+        : [],
+      );
+    } else {
+      throw Exception("내 정보 불러오기 실패: ${response.body}");
+    }
+  }
+
+  // ----------------------------------------------------
+  // 특정 사용자 정보 가져오기 (피드 이미지 포함)
+  // ----------------------------------------------------
+  static Future<User> getUserById(int userId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/$userId");
+    final response = await http.get(url, headers: _headers(json: false));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      return User(
+        id: data["id"],
+        name: data["name"] ?? "",
+        nickname: data["nickname"],
+        birthYear: data["birth_year"] ?? 0,
+        gender: data["gender"],
+        region: data["region"] ?? "",
+        school: data["school_name"] ?? "",
+        schoolType: data["school_type"],
+        admissionYear: data["admission_year"],
+        phone: data["phone"],
         profileImageUrl: data["profile_image"],
         backgroundImageUrl: data["background_image"],
         profileFeedImages: (data["feed_images"] != null)
@@ -87,7 +159,7 @@ class ApiService {
             : [],
       );
     } else {
-      throw Exception("내 정보 불러오기 실패: ${response.body}");
+      throw Exception("사용자 정보 불러오기 실패: ${response.body}");
     }
   }
 
@@ -127,12 +199,10 @@ class ApiService {
   }
 
   // ----------------------------------------------------
-  // 추천 친구 (룰 기반: GET /friends/recommendations)
-  //  - 기존 /users/me/recommended 에서 실제 백엔드 엔드포인트로 수정
+  // 추천 친구
   // ----------------------------------------------------
   static Future<List<User>> getRecommendedFriends() async {
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations");
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me/recommended");
 
     final response = await http.get(
       url,
@@ -140,16 +210,16 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final list = jsonDecode(response.body) as List<dynamic>;
+      final list = jsonDecode(response.body) as List;
 
       return list
           .map(
             (data) => User(
-              id: data["id"],
-              name: data["name"] ?? "",
-              birthYear: data["birth_year"] ?? 0,
-              region: data["region"] ?? "",
-              school: data["school_name"] ?? "",
+          id: data["id"],
+          name: data["name"],
+          birthYear: data["birth_year"],
+          region: data["region"],
+          school: data["school_name"],
               profileImageUrl: data["profile_image"],
               backgroundImageUrl: data["background_image"],
             ),
@@ -157,69 +227,6 @@ class ApiService {
           .toList();
     } else {
       throw Exception("추천 친구 불러오기 실패: ${response.body}");
-    }
-  }
-
-  // ----------------------------------------------------
-  // 추천 친구 (AI 이유 + 첫 메시지, 룰 기반 fallback)
-  //  반환 형식:
-  //  [
-  //    {
-  //      "user": { ...유저 JSON... },
-  //      "reason": "추천 이유",
-  //      "first_messages": ["메시지1", "메시지2", ...]
-  //    },
-  //    ...
-  //  ]
-  // ----------------------------------------------------
-  static Future<List<Map<String, dynamic>>> getFriendRecommendationsAI() async {
-    // 1차: AI 추천 시도
-    final aiUrl =
-        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations/ai");
-
-    try {
-      final aiResponse = await http.get(
-        aiUrl,
-        headers: _headers(json: false),
-      );
-
-      if (aiResponse.statusCode == 200) {
-        final list = jsonDecode(aiResponse.body) as List<dynamic>;
-        // 백엔드에서 이미 user + reason + first_messages 형태로 내려줌
-        return List<Map<String, dynamic>>.from(list);
-      }
-    } catch (_) {
-      // 네트워크 오류 등은 무시하고 fallback 진행
-    }
-
-    // 2차: 룰 기반 추천으로 fallback
-    final ruleUrl =
-        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations");
-
-    final ruleResponse = await http.get(
-      ruleUrl,
-      headers: _headers(json: false),
-    );
-
-    if (ruleResponse.statusCode == 200) {
-      final list = jsonDecode(ruleResponse.body) as List<dynamic>;
-
-      // 룰 기반 응답(User 리스트)을 AI 응답과 동일한 구조로 감싼다.
-      return list.map<Map<String, dynamic>>((data) {
-        final user = Map<String, dynamic>.from(data as Map);
-        final name = user["name"] ?? "친구";
-
-        return {
-          "user": user,
-          "reason": "학교/입학년도/지역/나이대가 비슷한 친구라 추천합니다.",
-          "first_messages": [
-            "$name님, 우리 프로필이 비슷해서 추천 친구로 떴어요. 반가워요!",
-            "혹시 같은 시기에 같은 학교 다녔을지도 모르겠네요 :)",
-          ],
-        };
-      }).toList();
-    } else {
-      throw Exception("AI 추천 친구 불러오기 실패: ${ruleResponse.body}");
     }
   }
 
@@ -353,6 +360,7 @@ class ApiService {
 
     throw Exception("댓글 목록 불러오기 실패: ${response.body}");
   }
+  
 
   // ----------------------------------------------------
   // 게시물 신고
@@ -407,6 +415,8 @@ class ApiService {
     throw Exception("좋아요 토글 실패: ${response.body}");
   }
 
+
+
   // ----------------------------------------------------
   // ❤️ 댓글 좋아요
   // ----------------------------------------------------
@@ -420,6 +430,52 @@ class ApiService {
     final url = Uri.parse("${ApiConfig.baseUrl}/comments/$commentId/like");
     final response = await http.delete(url, headers: _headers(json: false));
     return response.statusCode == 200;
+  }
+  // 🔥 [추가] 게시글 삭제
+  static Future<bool> deletePost(int postId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId");
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
+    // 204 No Content면 성공
+    return response.statusCode == 200 || response.statusCode == 204;
+  }
+
+  // ... (createPost, listPosts 등 기존 함수 유지) ...
+
+  static Future<bool> deleteComment(int postId, int commentId) async {
+    // 백엔드 라우터가 posts/{post_id}/comments/{comment_id} 형식을 사용한다고 가정
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/posts/$postId/comments/$commentId");
+    
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
+
+    // 200 OK 또는 204 No Content면 성공
+    return response.statusCode == 200 || response.statusCode == 204;
+  }
+
+  // ----------------------------------------------------
+  // ❤️ 댓글 좋아요 토글 (ON/OFF 통합)
+  // ----------------------------------------------------
+  static Future<Map<String, dynamic>> toggleCommentLike(int commentId) async {
+    // 백엔드 라우터가 comments/{comment_id}/like 형식을 사용한다고 가정
+    final url = Uri.parse("${ApiConfig.baseUrl}/comments/$commentId/like");
+    
+    final response = await http.post(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      // 백엔드는 { "is_liked": true/false, "like_count": 5 } 를 반환해야 합니다.
+      return jsonDecode(response.body); 
+    }
+    
+    throw Exception("댓글 좋아요 토글 실패: ${response.body}");
   }
 
   // ----------------------------------------------------
@@ -504,6 +560,21 @@ class ApiService {
     } else {
       throw Exception("메시지 전송 실패: ${response.body}");
     }
+  }
+
+  // ----------------------------------------------------
+  // 메시지 삭제
+  // ----------------------------------------------------
+  static Future<bool> deleteChatMessage(int roomId, int messageId) async {
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages/$messageId");
+
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
+
+    return response.statusCode == 200;
   }
 
   // ========================================
@@ -666,6 +737,36 @@ class ApiService {
     return response.statusCode == 200;
   }
 
+  // ✅ 채팅방 고정/고정 해제
+  static Future<bool> togglePinChatRoom(int roomId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/pin");
+
+    final response = await http.put(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+    return false;
+  }
+
+  // ✅ 메시지 고정/고정 해제
+  static Future<bool> togglePinMessage(int roomId, int messageId) async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages/$messageId/pin");
+
+    final response = await http.put(
+      url,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+    return false;
+  }
+
   static Future<Map<String, dynamic>> checkMyReport(int userId) async {
     final url =
         Uri.parse("${ApiConfig.baseUrl}/moderation/my-reports/$userId");
@@ -811,5 +912,19 @@ class ApiService {
       await updateMyInfo(updateData);
       AppState.currentUser = await getMyInfo();
     }
+  }
+// ----------------------------------------------------
+  // 🗑️ 회원탈퇴 (계정 삭제)
+  // ----------------------------------------------------
+  static Future<bool> withdrawAccount() async {
+    final url = Uri.parse("${ApiConfig.baseUrl}/users/me");
+
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
+
+    // 204 No Content 또는 200 OK면 성공
+    return response.statusCode == 200 || response.statusCode == 204;
   }
 }
