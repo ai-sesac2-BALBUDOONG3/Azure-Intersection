@@ -80,38 +80,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
     AppState.updateProfile();
   }
 
-  // ============================
-  // 피드용 이미지 선택
+// ============================
+  // 피드용 이미지 선택 및 업로드 - 수정완료
   // ============================
   Future<void> _pickFeedImage() async {
+    // 1. 파일 선택
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       withData: true,
     );
 
     if (result == null) return;
-
     final file = result.files.first;
-    final user = AppState.currentUser!;
+    
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("사진을 업로드 중입니다...")),
+    );
 
-    if (kIsWeb) {
-      // 웹은 data-url 형식으로 저장
-      if (file.bytes != null) {
-        final base64Str = base64Encode(file.bytes!);
-        final dataUrl = "data:image/png;base64,$base64Str";
-        user.profileFeedImages.add(dataUrl);
+    try {
+      Map<String, dynamic> response;
+
+      // 2. 서버로 전송 (게시글 생성)
+      if (kIsWeb) {
+        response = await ApiService.createPostWithMedia(
+          content: "프로필 피드 사진",
+          imageBytes: file.bytes,
+          fileName: file.name,
+        );
+      } else {
+        response = await ApiService.createPostWithMedia(
+          content: "프로필 피드 사진",
+          imageFile: File(file.path!),
+        );
       }
-    } else {
-      // 앱은 경로 그대로
-      if (file.path != null) {
-        user.profileFeedImages.add(file.path!);
+
+      // 3. [핵심] 서버가 돌려준 "진짜 이미지 주소"를 내 목록에 즉시 추가
+      // (이렇게 해야 새로고침 없이 바로 보입니다)
+      if (response['image_url'] != null) {
+        final newImageUrl = response['image_url'];
+        final user = AppState.currentUser!;
+        
+        // 리스트 맨 앞에 추가 (최신순)
+        user.profileFeedImages.insert(0, newImageUrl);
+        
+        setState(() {}); // 화면 갱신
       }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("피드에 사진이 추가되었습니다!")),
+      );
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("업로드 실패: $e")),
+      );
     }
-
-    setState(() {});
-    AppState.updateProfile();
   }
-
   // ============================
   // 공통 ImageProvider
   //   - 웹: Network / Memory / Asset

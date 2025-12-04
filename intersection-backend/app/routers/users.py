@@ -65,6 +65,7 @@ def create_user(data: UserCreate):
             school_type=data.school_type,
             admission_year=data.admission_year,
             email=data.login_id,
+            phone=data.phone,
             profile_image=data.profile_image,
             background_image=data.background_image
         )

@@ -158,6 +158,7 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
       'school_name': schoolNameController.text,
       'school_type': selectedSchoolLevel,
       'admission_year': admissionYear,
+      'phone': form.phoneNumber,
     };
 
     try {
@@ -277,19 +278,23 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
                           setState(() {}); 
                         },
                         fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+                          // 컨트롤러 값 동기화
                           if (schoolNameController.text.isNotEmpty && 
                               controller.text.isEmpty) {
                             controller.text = schoolNameController.text;
                           }
-                          controller.addListener(() {
-                            schoolNameController.text = controller.text;
-                            setState(() {}); 
-                          });
-
+                          
+                          // 🔥 [핵심 수정] controller.addListener 제거 -> onChanged 사용
+                          // addListener는 빌드될 때마다 중복으로 등록되어 성능 저하 및 오류를 유발합니다.
                           return TextField(
                             controller: controller,
                             focusNode: focusNode,
                             onEditingComplete: onEditingComplete,
+                            onChanged: (value) {
+                              // 사용자가 텍스트를 입력할 때마다 컨트롤러 업데이트 및 화면 갱신
+                              schoolNameController.text = value;
+                              setState(() {}); 
+                            },
                             decoration: InputDecoration(
                               hintText: '예: OO초등학교',
                               border: OutlineInputBorder(
@@ -336,7 +341,7 @@ class _SignupStep4ScreenState extends State<SignupStep4Screen> {
                   
                   const SizedBox(height: 20),
 
-                  // 🔥 [수정] 입학년도 (휠 피커 적용)
+                  // 입학년도 (휠 피커 적용)
                   const Text('입학년도',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
