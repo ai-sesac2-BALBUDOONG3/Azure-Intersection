@@ -1,15 +1,11 @@
-// lib/screens/chat/chat_list_screen.dart
-
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
-import '../../config/api_config.dart';
-import '../../data/app_state.dart';
 import '../../models/chat_room.dart';
+import '../../models/user.dart';
 import '../../services/api_service.dart';
+import '../../data/app_state.dart';
+import '../../config/api_config.dart';
 import 'chat_screen.dart';
+import 'dart:async';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -20,13 +16,11 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   List<ChatRoom> _chatRooms = [];
+  List<ChatRoom> _filteredRooms = [];
   bool _isLoading = true;
+  bool _isSearchMode = false;
   Timer? _pollingTimer;
-
-  // 채팅 리스트 시간 포맷터 (오전 8:32)
-  final DateFormat _timeFormatter = DateFormat('a h:mm', 'ko');
-  final DateFormat _dateFormatterSameYear = DateFormat('MM/dd', 'ko');
-  final DateFormat _dateFormatterOtherYear = DateFormat('yyyy/MM/dd', 'ko');
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -40,7 +34,44 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _filterRooms(String query) {
+    if (query.trim().isEmpty) {
+      _filteredRooms = _chatRooms;
+    } else {
+      final searchQuery = query.trim().toLowerCase();
+      final filtered = _chatRooms.where((room) {
+        final friendName = (room.friendName ?? "").toLowerCase();
+        final lastMessage = (room.lastMessage ?? "").toLowerCase();
+        
+        // 사용자 이름 또는 마지막 메시지 내용에서만 검색
+        return friendName.contains(searchQuery) || lastMessage.contains(searchQuery);
+      }).toList();
+      
+      // 검색 결과도 고정된 것이 먼저 오도록 정렬
+      filtered.sort((a, b) {
+        if (a.isPinned != b.isPinned) {
+          return b.isPinned ? 1 : -1;
+        }
+        return 0;
+      });
+      
+      _filteredRooms = filtered;
+    }
+  }
+
+
+  void _toggleSearchMode() {
+    setState(() {
+      _isSearchMode = !_isSearchMode;
+      if (!_isSearchMode) {
+        _searchController.clear();
+        _filteredRooms = _chatRooms;
+      }
+    });
   }
 
   Future<void> _loadChatRooms({bool showLoading = true}) async {
@@ -54,8 +85,26 @@ class _ChatListScreenState extends State<ChatListScreen> {
     try {
       final rooms = await ApiService.getMyChatRooms();
       if (mounted) {
+        // 고정된 채팅방을 최상단에 정렬
+        _chatRooms = List.from(rooms);
+        _chatRooms.sort((a, b) {
+          // 고정된 것이 먼저
+          if (a.isPinned != b.isPinned) {
+            return b.isPinned ? 1 : -1;
+          }
+          // 같은 고정 상태면 시간 역순 (최신이 먼저)
+          final aTime = a.lastMessageTime ?? "";
+          final bTime = b.lastMessageTime ?? "";
+          return bTime.compareTo(aTime);
+        });
+        
+        // 검색 모드이고 검색어가 있으면 필터링 적용, 아니면 전체 목록 표시
+        if (_isSearchMode && _searchController.text.trim().isNotEmpty) {
+          _filterRooms(_searchController.text);
+        } else {
+          _filteredRooms = _chatRooms;
+        }
         setState(() {
-          _chatRooms = rooms;
           if (showLoading) {
             _isLoading = false;
           }
@@ -71,101 +120,382 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_chatRooms.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 80,
-              color: Colors.grey.shade300,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "아직 채팅이 없어요",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "친구와 대화를 시작해보세요!",
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        title: _isSearchMode
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.black87),
+                decoration: InputDecoration(
+                  hintText: '채팅방 검색',
+                  hintStyle: TextStyle(color: Colors.grey.shade500),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  _filterRooms(value);
+                  setState(() {});
+                },
+              )
+            : const Text('채팅'),
+        toolbarHeight: 64,
+        titleSpacing: 16,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadChatRooms,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: _chatRooms.length,
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          indent: 80,
-          color: Colors.grey.shade200,
-        ),
-        itemBuilder: (context, index) {
-          final room = _chatRooms[index];
-          return _buildChatRoomTile(room);
-        },
+        actions: [
+          IconButton(
+            icon: Icon(_isSearchMode ? Icons.close : Icons.search),
+            onPressed: _toggleSearchMode,
+            tooltip: _isSearchMode ? '검색 닫기' : '검색',
+          ),
+        ],
+      ),
+      backgroundColor: Colors.white,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _chatRooms.isEmpty && !_isSearchMode
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 80,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        "아직 채팅이 없어요",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "친구와 대화를 시작해보세요!",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : _isSearchMode && _searchController.text.trim().isNotEmpty && _filteredRooms.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.search_off,
+                            size: 80,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "검색 결과가 없어요",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "다른 검색어를 입력해보세요",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+              : RefreshIndicator(
+                  onRefresh: _loadChatRooms,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _filteredRooms.length,
+                    separatorBuilder: (context, index) => Divider(
+                      height: 1,
+                      indent: 80,
+                      color: Colors.grey.shade200,
+                    ),
+                    itemBuilder: (context, index) {
+                      final room = _filteredRooms[index];
+                      return _buildChatRoomTile(room);
+                    },
+                  ),
+                ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showFriendListDialog,
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  /// 채팅 리스트에 표시할 시간 문자열 포맷
-  String _formatChatTime(String isoString) {
+  /// 친구 목록 다이얼로그 표시
+  Future<void> _showFriendListDialog() async {
+    // 친구 목록 로드
+    List<User> friends = [];
+    bool isLoading = true;
+
     try {
-      // 서버에서 온 시간을 DateTime으로 파싱
-      DateTime dt = DateTime.parse(isoString);
-
-      // UTC 로 들어온 경우를 대비해서 로컬 타임존으로 변환
-      dt = dt.toLocal();
-
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final date = DateTime(dt.year, dt.month, dt.day);
-
-      // 오늘 보낸 메시지면: "오전 8:32"
-      if (date == today) {
-        return _timeFormatter.format(dt);
-      }
-
-      // 어제 보낸 메시지면: "어제 오전 8:32"
-      final yesterday = today.subtract(const Duration(days: 1));
-      if (date == yesterday) {
-        return "어제 ${_timeFormatter.format(dt)}";
-      }
-
-      // 같은 해: "MM/dd"
-      if (dt.year == now.year) {
-        return _dateFormatterSameYear.format(dt);
-      }
-
-      // 그 외: "yyyy/MM/dd"
-      return _dateFormatterOtherYear.format(dt);
+      friends = await ApiService.getFriends();
+      // 이미 채팅방이 있는 친구는 제외 (선택적)
+      // 또는 모든 친구를 보여주고 채팅방이 있으면 이동, 없으면 생성
     } catch (e) {
-      debugPrint("시간 포맷 오류: $e");
-      return "";
+      debugPrint("친구 목록 불러오기 오류: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('친구 목록을 불러올 수 없습니다: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // 헤더
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    '친구 선택',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // 친구 목록
+            Expanded(
+              child: friends.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 64,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '친구가 없습니다',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: friends.length,
+                      itemBuilder: (context, index) {
+                        final friend = friends[index];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: friend.profileImageUrl != null
+                              ? CircleAvatar(
+                                  radius: 28,
+                                  backgroundImage: NetworkImage(
+                                    "${ApiConfig.baseUrl}${friend.profileImageUrl}",
+                                  ),
+                                  onBackgroundImageError: (_, __) {},
+                                )
+                              : CircleAvatar(
+                                  radius: 28,
+                                  backgroundColor: Colors.blue.shade100,
+                                  child: Text(
+                                    friend.name.substring(0, 1),
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ),
+                          title: Text(
+                            friend.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: friend.region != null && friend.region!.isNotEmpty
+                              ? Text(
+                                  friend.region!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                )
+                              : null,
+                          trailing: ElevatedButton(
+                            onPressed: () => _startChatWithFriend(friend),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 8,
+                              ),
+                            ),
+                            child: const Text('채팅하기'),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 친구와 채팅 시작
+  Future<void> _startChatWithFriend(User friend) async {
+    // 다이얼로그 닫기
+    Navigator.pop(context);
+
+    try {
+      // 로딩 표시
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      // 채팅방 생성 또는 가져오기
+      final chatRoom = await ApiService.createOrGetChatRoom(friend.id);
+
+      if (mounted) {
+        // 로딩 다이얼로그 닫기
+        Navigator.pop(context);
+
+        // 차단/신고 상태 확인
+        bool iReportedThem = false;
+        bool theyBlockedMe = false;
+        bool theyLeft = false;
+
+        try {
+          final blockStatus = await ApiService.checkIfBlocked(friend.id);
+          iReportedThem = blockStatus['i_blocked_them'] ?? false;
+          theyBlockedMe = blockStatus['they_blocked_me'] ?? false;
+
+          final reportStatus = await ApiService.checkMyReport(friend.id);
+          if (reportStatus['has_reported'] == true) {
+            iReportedThem = true;
+          }
+        } catch (e) {
+          debugPrint("차단/신고 상태 확인 오류: $e");
+        }
+
+        // 채팅 화면으로 이동
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
+              roomId: chatRoom.id,
+              friendId: friend.id,
+              friendName: friend.name,
+              friendProfileImage: friend.profileImageUrl,
+              iReportedThem: iReportedThem,
+              theyBlockedMe: theyBlockedMe,
+              theyLeft: theyLeft,
+            ),
+          ),
+        ).then((_) => _loadChatRooms());
+      }
+    } catch (e) {
+      debugPrint("채팅방 생성 오류: $e");
+      if (mounted) {
+        // 로딩 다이얼로그 닫기
+        Navigator.pop(context);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('채팅방을 생성할 수 없습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
   Widget _buildChatRoomTile(ChatRoom room) {
     String timeText = "";
-    if (room.lastMessageTime != null && room.lastMessageTime!.isNotEmpty) {
-      timeText = _formatChatTime(room.lastMessageTime!);
+    if (room.lastMessageTime != null) {
+      try {
+        final dateTime = DateTime.parse(room.lastMessageTime!);
+        final now = DateTime.now();
+        final diff = now.difference(dateTime);
+
+        if (diff.inMinutes < 1) {
+          timeText = "방금";
+        } else if (diff.inHours < 1) {
+          timeText = "${diff.inMinutes}분 전";
+        } else if (diff.inDays < 1) {
+          timeText = "${diff.inHours}시간 전";
+        } else if (diff.inDays < 7) {
+          timeText = "${diff.inDays}일 전";
+        } else {
+          timeText = "${dateTime.month}/${dateTime.day}";
+        }
+      } catch (e) {
+        timeText = "";
+      }
     }
 
     return ListTile(
@@ -193,12 +523,22 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
       title: Row(
         children: [
+          if (room.isPinned)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(
+                Icons.push_pin,
+                size: 16,
+                color: Colors.blue.shade600,
+              ),
+            ),
           Expanded(
             child: Text(
               room.friendName ?? "Unknown",
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
+                color: room.isPinned ? Colors.blue.shade700 : Colors.black87,
               ),
             ),
           ),
@@ -237,6 +577,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             ),
           ],
+          
           Expanded(
             child: Text(
               room.lastMessage ?? "메시지가 없습니다",
@@ -272,6 +613,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ),
         ],
       ),
+      trailing: IconButton(
+        icon: Icon(
+          room.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+          color: room.isPinned ? Colors.blue.shade600 : Colors.grey.shade400,
+          size: 20,
+        ),
+        onPressed: () async {
+          final success = await ApiService.togglePinChatRoom(room.id);
+          if (success) {
+            _loadChatRooms(showLoading: false);
+          }
+        },
+        tooltip: room.isPinned ? '고정 해제' : '고정하기',
+      ),
       onTap: () {
         Navigator.push(
           context,
@@ -283,7 +638,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               friendProfileImage: room.friendProfileImage,
               iReportedThem: room.iReportedThem,
               theyBlockedMe: room.theyBlockedMe,
-              theyLeft: room.theyLeft,
+              theyLeft: room.theyLeft,  // ✅ 추가
             ),
           ),
         ).then((_) => _loadChatRooms());
