@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/chat_room.dart';
+import '../../models/user.dart';
 import '../../services/api_service.dart';
 import '../../data/app_state.dart';
 import '../../config/api_config.dart';
@@ -138,14 +139,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   setState(() {});
                 },
               )
-            : const Text(
-                '채팅',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
+            : const Text('채팅'),
+        toolbarHeight: 64,
+        titleSpacing: 16,
         backgroundColor: Colors.white,
         elevation: 0,
         shadowColor: Colors.transparent,
@@ -244,7 +240,238 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     },
                   ),
                 ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showFriendListDialog,
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
     );
+  }
+
+  /// 친구 목록 다이얼로그 표시
+  Future<void> _showFriendListDialog() async {
+    // 친구 목록 로드
+    List<User> friends = [];
+    bool isLoading = true;
+
+    try {
+      friends = await ApiService.getFriends();
+      // 이미 채팅방이 있는 친구는 제외 (선택적)
+      // 또는 모든 친구를 보여주고 채팅방이 있으면 이동, 없으면 생성
+    } catch (e) {
+      debugPrint("친구 목록 불러오기 오류: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('친구 목록을 불러올 수 없습니다: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // 헤더
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    '친구 선택',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // 친구 목록
+            Expanded(
+              child: friends.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 64,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '친구가 없습니다',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: friends.length,
+                      itemBuilder: (context, index) {
+                        final friend = friends[index];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: friend.profileImageUrl != null
+                              ? CircleAvatar(
+                                  radius: 28,
+                                  backgroundImage: NetworkImage(
+                                    "${ApiConfig.baseUrl}${friend.profileImageUrl}",
+                                  ),
+                                  onBackgroundImageError: (_, __) {},
+                                )
+                              : CircleAvatar(
+                                  radius: 28,
+                                  backgroundColor: Colors.blue.shade100,
+                                  child: Text(
+                                    friend.name.substring(0, 1),
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ),
+                          title: Text(
+                            friend.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: friend.region != null && friend.region!.isNotEmpty
+                              ? Text(
+                                  friend.region!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                )
+                              : null,
+                          trailing: ElevatedButton(
+                            onPressed: () => _startChatWithFriend(friend),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 8,
+                              ),
+                            ),
+                            child: const Text('채팅하기'),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 친구와 채팅 시작
+  Future<void> _startChatWithFriend(User friend) async {
+    // 다이얼로그 닫기
+    Navigator.pop(context);
+
+    try {
+      // 로딩 표시
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      // 채팅방 생성 또는 가져오기
+      final chatRoom = await ApiService.createOrGetChatRoom(friend.id);
+
+      if (mounted) {
+        // 로딩 다이얼로그 닫기
+        Navigator.pop(context);
+
+        // 차단/신고 상태 확인
+        bool iReportedThem = false;
+        bool theyBlockedMe = false;
+        bool theyLeft = false;
+
+        try {
+          final blockStatus = await ApiService.checkIfBlocked(friend.id);
+          iReportedThem = blockStatus['i_blocked_them'] ?? false;
+          theyBlockedMe = blockStatus['they_blocked_me'] ?? false;
+
+          final reportStatus = await ApiService.checkMyReport(friend.id);
+          if (reportStatus['has_reported'] == true) {
+            iReportedThem = true;
+          }
+        } catch (e) {
+          debugPrint("차단/신고 상태 확인 오류: $e");
+        }
+
+        // 채팅 화면으로 이동
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
+              roomId: chatRoom.id,
+              friendId: friend.id,
+              friendName: friend.name,
+              friendProfileImage: friend.profileImageUrl,
+              iReportedThem: iReportedThem,
+              theyBlockedMe: theyBlockedMe,
+              theyLeft: theyLeft,
+            ),
+          ),
+        ).then((_) => _loadChatRooms());
+      }
+    } catch (e) {
+      debugPrint("채팅방 생성 오류: $e");
+      if (mounted) {
+        // 로딩 다이얼로그 닫기
+        Navigator.pop(context);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('채팅방을 생성할 수 없습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildChatRoomTile(ChatRoom room) {

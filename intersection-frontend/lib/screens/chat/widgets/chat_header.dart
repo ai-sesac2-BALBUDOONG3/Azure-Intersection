@@ -43,11 +43,13 @@ class ChatHeader extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 1);
+  Size get preferredSize => const Size.fromHeight(64 + 1);
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      toolbarHeight: 64,
+      titleSpacing: 16,
       title: isSearchMode
           ? TextField(
               controller: searchController,

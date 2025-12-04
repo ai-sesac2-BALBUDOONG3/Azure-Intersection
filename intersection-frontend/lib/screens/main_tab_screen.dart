@@ -78,22 +78,50 @@ class _MainTabScreenState extends State<MainTabScreen> {
         title: const Text("친구 목록"),
         toolbarHeight: 64,      // 상단 여백 증가
         titleSpacing: 16,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
       ),
       AppBar(
         title: const Text("추천 친구"),
         toolbarHeight: 64,
         titleSpacing: 16,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
       ),
       AppBar(
         title: const Text("커뮤니티"),
         toolbarHeight: 64,
         titleSpacing: 16,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
       ),
       null, // 채팅 화면은 자체 AppBar 사용
       AppBar(
         title: const Text("내 정보"),
         toolbarHeight: 64,
         titleSpacing: 16,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
+        ),
       ),
     ];
 
