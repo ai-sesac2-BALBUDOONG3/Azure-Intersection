@@ -16,7 +16,11 @@ class RecommendedFriendsScreen extends StatefulWidget {
 
 class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   bool _isLoading = true;
-  List<User> _recommended = [];
+
+  /// 백엔드에서 내려오는 원본 리스트
+  /// - AI 추천 API 결과가 Map 형태일 수도, User 형태일 수도 있어서 dynamic으로 둔다.
+  List<dynamic> _rawRecommended = [];
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
@@ -37,6 +41,7 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     super.dispose();
   }
 
+  /// 백엔드에서 AI 추천 친구 목록을 불러옴
   Future<void> _loadRecommended() async {
     // 로그인하지 않은 경우 API 호출하지 않음
     if (AppState.token == null) {
@@ -45,10 +50,12 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     }
 
     try {
+      // ApiService.getFriendRecommendationsAI()가
+      // List<dynamic> 또는 List<Map<String, dynamic>> 를 반환한다고 가정
       final list = await ApiService.getFriendRecommendationsAI();
 
       setState(() {
-        _recommended = list;
+        _rawRecommended = list;
         _isLoading = false;
       });
     } catch (e) {
@@ -57,32 +64,66 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
     }
   }
 
-  Future<void> _addFriend(Map<String, dynamic> item) async {
-    try {
-      final userJson =
-          Map<String, dynamic>.from(item['user'] ?? <String, dynamic>{});
+  /// 백엔드에서 내려온 item 하나를 화면에서 쓰는 User 모델로 변환
+  User _mapToUser(dynamic item) {
+    // 이미 User 타입이면 그대로 사용
+    if (item is User) {
+      return item;
+    }
 
-      final user = User(
-        id: userJson['id'],
-        name: userJson['name'] ?? '',
-        birthYear: userJson['birth_year'] ?? 0,
-        region: userJson['region'] ?? '',
-        school: userJson['school_name'] ?? '',
-        profileImageUrl: userJson['profile_image'],
-        backgroundImageUrl: userJson['background_image'],
+    // Map 형태일 경우 (예: { user: {...}, score: ..., reason: ... })
+    if (item is Map<String, dynamic>) {
+      // item['user'] 안에 실제 사용자 정보가 있다고 가정
+      final userJson = Map<String, dynamic>.from(
+        (item['user'] ?? item) as Map<String, dynamic>,
       );
 
+      return User(
+        id: userJson['id'] as int,
+        name: (userJson['name'] ?? '') as String,
+        birthYear: (userJson['birth_year'] ?? 0) as int,
+        region: (userJson['region'] ?? '') as String,
+        school: (userJson['school_name'] ?? '') as String,
+        profileImageUrl: userJson['profile_image'] as String?,
+        backgroundImageUrl: userJson['background_image'] as String?,
+      );
+    }
+
+    throw ArgumentError('지원하지 않는 추천 데이터 형식: ${item.runtimeType}');
+  }
+
+  /// 친구 추가
+  Future<void> _addFriend(User user) async {
+    try {
       final success = await ApiService.addFriend(user.id);
 
       if (success) {
         setState(() {
-          _recommended.removeWhere((m) {
-            final u = m['user'] as Map?;
-            return u?['id'] == user.id;
+          // 원본 리스트(_rawRecommended)에서 해당 유저 제거
+          _rawRecommended.removeWhere((m) {
+            try {
+              if (m is User) {
+                return m.id == user.id;
+              }
+              if (m is Map<String, dynamic>) {
+                final inner =
+                    (m['user'] ?? m) as Map<String, dynamic>?; // { user: {...} } or {...}
+                final id = inner?['id'];
+                return id == user.id;
+              }
+            } catch (_) {
+              return false;
+            }
+            return false;
           });
         });
 
-        AppState.friends.add(user);
+        // AppState.friends 에도 추가 (이미 있으면 중복 추가 X)
+        final alreadyFriend =
+            AppState.friends.any((f) => f.id == user.id);
+        if (!alreadyFriend) {
+          AppState.friends.add(user);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -110,10 +151,22 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
   Widget build(BuildContext context) {
     final currentFriends = AppState.friends;
 
+    // 원본 리스트(_rawRecommended)를 User 리스트로 변환
+    final List<User> users = _rawRecommended
+        .map((item) {
+          try {
+            return _mapToUser(item);
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<User>()
+        .toList();
+
     // 검색 필터링
     final filteredRecommended = _searchQuery.isEmpty
-        ? _recommended
-        : _recommended
+        ? users
+        : users
             .where((user) =>
                 user.name.toLowerCase().contains(_searchQuery) ||
                 (user.school?.toLowerCase().contains(_searchQuery) ?? false) ||
@@ -195,25 +248,26 @@ class _RecommendedFriendsScreenState extends State<RecommendedFriendsScreen> {
               ),
               title: Text(user.name),
               subtitle: Text("${user.school} · ${user.region}"),
-
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        FriendProfileScreen(user: user),
+                    builder: (_) => FriendProfileScreen(user: user),
                   ),
                 );
               },
-
               trailing: isFriendAlready
-                  ? const Icon(Icons.check_circle,
-                      color: Colors.green, size: 22)
+                  ? const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                      size: 22,
+                    )
                   : FilledButton(
                       onPressed: () => _addFriend(user),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 18),
+                          horizontal: 18,
+                        ),
                       ),
                       child: const Text('추가'),
                     ),

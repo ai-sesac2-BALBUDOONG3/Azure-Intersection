@@ -40,30 +40,29 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      
-// 1. 에러 응답 본문 해독 (한글 깨짐 방지 utf8.decode 사용)
+      // 한글 깨짐 방지
       final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
       final errorMessage = errorBody['detail'] ?? '';
 
-      // 2. "이미 존재하는 아이디" 에러인지 확인
       if (errorMessage == "login_id already exists") {
-        // 팝업창에 띄우고 싶은 문구로 변경하세요 👇
-        throw Exception("이미 가입된 이메일입니다.\n로그인하거나 다른 이메일을 사용해주세요.");
+        throw Exception(
+          "이미 가입된 이메일입니다.\n로그인하거나 다른 이메일을 사용해주세요.",
+        );
       }
 
-      // 3. 그 외 다른 에러인 경우
       throw Exception("회원가입 실패: $errorMessage");
     }
   }
 
-// ----------------------------------------------------
+  // ----------------------------------------------------
   // 🏫 학교 검색 (자동완성용)
   // ----------------------------------------------------
   static Future<List<String>> searchSchools(String keyword) async {
     if (keyword.isEmpty) return [];
 
     final url = Uri.parse(
-        "${ApiConfig.baseUrl}/common/search/schools?keyword=$keyword");
+      "${ApiConfig.baseUrl}/common/search/schools?keyword=$keyword",
+    );
 
     final response = await http.get(
       url,
@@ -71,10 +70,10 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> list = jsonDecode(utf8.decode(response.bodyBytes));
+      final List<dynamic> list =
+          jsonDecode(utf8.decode(response.bodyBytes));
       return list.map((e) => e.toString()).toList();
     } else {
-      // 에러 시 빈 리스트 반환 (조용히 처리)
       return [];
     }
   }
@@ -123,8 +122,8 @@ class ApiService {
         profileImageUrl: data["profile_image"],
         backgroundImageUrl: data["background_image"],
         profileFeedImages: (data["feed_images"] != null)
-        ? List<String>.from(data["feed_images"])
-        : [],
+            ? List<String>.from(data["feed_images"])
+            : [],
       );
     } else {
       throw Exception("내 정보 불러오기 실패: ${response.body}");
@@ -180,7 +179,8 @@ class ApiService {
       if (data["school_type"] != null) "school_type": data["school_type"],
       if (data["admission_year"] != null)
         "admission_year": data["admission_year"],
-      if (data["profile_image"] != null) "profile_image": data["profile_image"],
+      if (data["profile_image"] != null)
+        "profile_image": data["profile_image"],
       if (data["background_image"] != null)
         "background_image": data["background_image"],
     };
@@ -199,7 +199,7 @@ class ApiService {
   }
 
   // ----------------------------------------------------
-  // 추천 친구
+  // 추천 친구 (룰 기반)
   // ----------------------------------------------------
   static Future<List<User>> getRecommendedFriends() async {
     final url = Uri.parse("${ApiConfig.baseUrl}/users/me/recommended");
@@ -215,11 +215,11 @@ class ApiService {
       return list
           .map(
             (data) => User(
-          id: data["id"],
-          name: data["name"],
-          birthYear: data["birth_year"],
-          region: data["region"],
-          school: data["school_name"],
+              id: data["id"],
+              name: data["name"],
+              birthYear: data["birth_year"],
+              region: data["region"],
+              school: data["school_name"],
               profileImageUrl: data["profile_image"],
               backgroundImageUrl: data["background_image"],
             ),
@@ -227,6 +227,51 @@ class ApiService {
           .toList();
     } else {
       throw Exception("추천 친구 불러오기 실패: ${response.body}");
+    }
+  }
+
+  /// =============================
+  /// AI 추천 친구 목록 조회
+  /// 백엔드: GET /friends/recommendations/ai
+  /// =============================
+  static Future<List<User>> getFriendRecommendationsAI() async {
+    final uri =
+        Uri.parse("${ApiConfig.baseUrl}/friends/recommendations/ai");
+
+    final response = await http.get(
+      uri,
+      headers: _headers(json: false),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> rawList =
+          jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+
+      return rawList.map<User>((item) {
+        // AI 응답이 { "user": {...}, "score": ..., "ai": {...} } 형식이라고 가정
+        Map<String, dynamic> data;
+
+        if (item is Map<String, dynamic> && item['user'] != null) {
+          data = Map<String, dynamic>.from(item['user'] as Map);
+        } else {
+          data = Map<String, dynamic>.from(item as Map);
+        }
+
+        return User(
+          id: data["id"],
+          name: data["name"] ?? "",
+          birthYear: data["birth_year"] ?? 0,
+          region: data["region"] ?? "",
+          school: data["school_name"] ?? "",
+          profileImageUrl: data["profile_image"],
+          backgroundImageUrl: data["background_image"],
+        );
+      }).toList();
+    } else {
+      throw Exception(
+        "AI 추천 친구 불러오기 실패: "
+        "${response.statusCode} ${response.body}",
+      );
     }
   }
 
@@ -294,50 +339,46 @@ class ApiService {
     throw Exception("게시글 작성 실패: ${response.body}");
   }
 
-// ----------------------------------------------------
-  // 📸 게시글 작성 (이미지 파일 포함 전송) - 수정된 버전
+  // ----------------------------------------------------
+  // 📸 게시글 작성 (이미지 파일 포함 전송)
   // ----------------------------------------------------
   static Future<Map<String, dynamic>> createPostWithMedia({
     required String content,
-    File? imageFile,       // 앱(휴대폰)에서 선택한 파일
-    Uint8List? imageBytes, // 웹에서 선택한 파일 데이터
-    String? fileName,      // 파일 이름
+    File? imageFile,
+    Uint8List? imageBytes,
+    String? fileName,
   }) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/users/me/posts/");
-    
-    // 1. Multipart 요청 생성 (파일 전송용 봉투 만들기)
-    var request = http.MultipartRequest("POST", url);
-    
-    // 2. 헤더 설정 (로그인 토큰 붙이기)
+
+    final request = http.MultipartRequest("POST", url);
+
     if (AppState.token != null) {
       request.headers["Authorization"] = "Bearer ${AppState.token}";
     }
 
-    // 3. 내용(Content) 넣기
     request.fields["content"] = content;
 
-    // 4. 사진 파일 넣기
     if (imageFile != null) {
-      // 📱 앱: 파일 경로로 넣기
-      request.files.add(await http.MultipartFile.fromPath(
-        "file", // 백엔드가 'file'이라는 이름으로 받기로 약속했음
-        imageFile.path,
-      ));
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          "file",
+          imageFile.path,
+        ),
+      );
     } else if (imageBytes != null && fileName != null) {
-      // 🌐 웹: 데이터(Bytes)로 넣기
-      request.files.add(http.MultipartFile.fromBytes(
-        "file",
-        imageBytes,
-        filename: fileName,
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          "file",
+          imageBytes,
+          filename: fileName,
+        ),
+      );
     }
 
-    // 5. 전송 및 결과 확인
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      // 한글 깨짐 방지를 위해 utf8.decode 사용
       return jsonDecode(utf8.decode(response.bodyBytes));
     }
 
@@ -350,7 +391,7 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final list = jsonDecode(response.body) as List;
-      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+      return List<Map<String, dynamic>>.from(list);
     }
 
     throw Exception("게시물 목록 불러오기 실패: ${response.body}");
@@ -386,7 +427,6 @@ class ApiService {
 
     throw Exception("댓글 목록 불러오기 실패: ${response.body}");
   }
-  
 
   // ----------------------------------------------------
   // 게시물 신고
@@ -405,6 +445,7 @@ class ApiService {
 
     return response.statusCode == 200;
   }
+
   // ----------------------------------------------------
   // ❤️ 게시물 좋아요 — 서버 토글 방식
   // ----------------------------------------------------
@@ -427,8 +468,6 @@ class ApiService {
     throw Exception("좋아요 토글 실패: ${response.body}");
   }
 
-
-
   // ----------------------------------------------------
   // ❤️ 댓글 좋아요
   // ----------------------------------------------------
@@ -440,53 +479,52 @@ class ApiService {
 
   static Future<bool> unlikeComment(int commentId) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/comments/$commentId/like");
-    final response = await http.delete(url, headers: _headers(json: false));
+    final response = await http.delete(
+      url,
+      headers: _headers(json: false),
+    );
     return response.statusCode == 200;
   }
-  // 🔥 [추가] 게시글 삭제
+
+  // 🔥 게시글 삭제
   static Future<bool> deletePost(int postId) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/posts/$postId");
     final response = await http.delete(
       url,
       headers: _headers(json: false),
     );
-    // 204 No Content면 성공
     return response.statusCode == 200 || response.statusCode == 204;
   }
 
-  // ... (createPost, listPosts 등 기존 함수 유지) ...
-
   static Future<bool> deleteComment(int postId, int commentId) async {
-    // 백엔드 라우터가 posts/{post_id}/comments/{comment_id} 형식을 사용한다고 가정
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/posts/$postId/comments/$commentId");
-    
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/posts/$postId/comments/$commentId",
+    );
+
     final response = await http.delete(
       url,
       headers: _headers(json: false),
     );
 
-    // 200 OK 또는 204 No Content면 성공
     return response.statusCode == 200 || response.statusCode == 204;
   }
 
   // ----------------------------------------------------
   // ❤️ 댓글 좋아요 토글 (ON/OFF 통합)
   // ----------------------------------------------------
-  static Future<Map<String, dynamic>> toggleCommentLike(int commentId) async {
-    // 백엔드 라우터가 comments/{comment_id}/like 형식을 사용한다고 가정
+  static Future<Map<String, dynamic>> toggleCommentLike(
+      int commentId) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/comments/$commentId/like");
-    
+
     final response = await http.post(
       url,
       headers: _headers(json: false),
     );
 
     if (response.statusCode == 200) {
-      // 백엔드는 { "is_liked": true/false, "like_count": 5 } 를 반환해야 합니다.
-      return jsonDecode(response.body); 
+      return jsonDecode(response.body);
     }
-    
+
     throw Exception("댓글 좋아요 토글 실패: ${response.body}");
   }
 
@@ -577,9 +615,11 @@ class ApiService {
   // ----------------------------------------------------
   // 메시지 삭제
   // ----------------------------------------------------
-  static Future<bool> deleteChatMessage(int roomId, int messageId) async {
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages/$messageId");
+  static Future<bool> deleteChatMessage(
+      int roomId, int messageId) async {
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/chat/rooms/$roomId/messages/$messageId",
+    );
 
     final response = await http.delete(
       url,
@@ -595,17 +635,19 @@ class ApiService {
   static Future<Map<String, dynamic>> uploadFile(File file) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/upload");
 
-    var request = http.MultipartRequest('POST', url);
+    final request = http.MultipartRequest('POST', url);
 
     if (AppState.token != null) {
       request.headers['Authorization'] = 'Bearer ${AppState.token}';
     }
 
-    request.files.add(await http.MultipartFile.fromPath(
-      'file',
-      file.path,
-      filename: file.path.split('/').last,
-    ));
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        file.path,
+        filename: file.path.split('/').last,
+      ),
+    );
 
     final response = await request.send();
     final responseBody = await response.stream.bytesToString();
@@ -621,17 +663,19 @@ class ApiService {
       Uint8List bytes, String fileName) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/upload");
 
-    var request = http.MultipartRequest('POST', url);
+    final request = http.MultipartRequest('POST', url);
 
     if (AppState.token != null) {
       request.headers['Authorization'] = 'Bearer ${AppState.token}';
     }
 
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: fileName,
-    ));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+      ),
+    );
 
     final response = await request.send();
     final responseBody = await response.stream.bytesToString();
@@ -687,8 +731,9 @@ class ApiService {
   }
 
   static Future<bool> unblockUser(int userId) async {
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/moderation/block/$userId");
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/moderation/block/$userId",
+    );
 
     final response = await http.delete(
       url,
@@ -699,8 +744,9 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> checkIfBlocked(int userId) async {
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/moderation/is-blocked/$userId");
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/moderation/is-blocked/$userId",
+    );
 
     final response = await http.get(
       url,
@@ -738,8 +784,7 @@ class ApiService {
   }
 
   static Future<bool> deleteChatRoom(int roomId) async {
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId");
+    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId");
 
     final response = await http.delete(
       url,
@@ -751,37 +796,36 @@ class ApiService {
 
   // ✅ 채팅방 고정/고정 해제
   static Future<bool> togglePinChatRoom(int roomId) async {
-    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/pin");
+    final url =
+        Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/pin");
 
     final response = await http.put(
       url,
       headers: _headers(json: false),
     );
 
-    if (response.statusCode == 200) {
-      return true;
-    }
-    return false;
+    return response.statusCode == 200;
   }
 
   // ✅ 메시지 고정/고정 해제
-  static Future<bool> togglePinMessage(int roomId, int messageId) async {
-    final url = Uri.parse("${ApiConfig.baseUrl}/chat/rooms/$roomId/messages/$messageId/pin");
+  static Future<bool> togglePinMessage(
+      int roomId, int messageId) async {
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/chat/rooms/$roomId/messages/$messageId/pin",
+    );
 
     final response = await http.put(
       url,
       headers: _headers(json: false),
     );
 
-    if (response.statusCode == 200) {
-      return true;
-    }
-    return false;
+    return response.statusCode == 200;
   }
 
   static Future<Map<String, dynamic>> checkMyReport(int userId) async {
-    final url =
-        Uri.parse("${ApiConfig.baseUrl}/moderation/my-reports/$userId");
+    final url = Uri.parse(
+      "${ApiConfig.baseUrl}/moderation/my-reports/$userId",
+    );
 
     final response = await http.get(
       url,
@@ -813,16 +857,18 @@ class ApiService {
       int roomId, Uint8List bytes, String fileName) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/upload");
 
-    var request = http.MultipartRequest('POST', url);
+    final request = http.MultipartRequest('POST', url);
     if (AppState.token != null) {
       request.headers['Authorization'] = 'Bearer ${AppState.token}';
     }
 
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: fileName,
-    ));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+      ),
+    );
 
     final response = await request.send();
     final body = await response.stream.bytesToString();
@@ -847,16 +893,18 @@ class ApiService {
       int roomId, Uint8List bytes, String fileName) async {
     final url = Uri.parse("${ApiConfig.baseUrl}/upload");
 
-    var request = http.MultipartRequest('POST', url);
+    final request = http.MultipartRequest('POST', url);
     if (AppState.token != null) {
       request.headers['Authorization'] = 'Bearer ${AppState.token}';
     }
 
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: fileName,
-    ));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+      ),
+    );
 
     final response = await request.send();
     final body = await response.stream.bytesToString();
@@ -915,17 +963,19 @@ class ApiService {
       }
     }
 
-    // 서버에 URL 저장
     final updateData = <String, dynamic>{};
     if (profileUrl != null) updateData["profile_image"] = profileUrl;
-    if (backgroundUrl != null) updateData["background_image"] = backgroundUrl;
+    if (backgroundUrl != null) {
+      updateData["background_image"] = backgroundUrl;
+    }
 
     if (updateData.isNotEmpty) {
       await updateMyInfo(updateData);
       AppState.currentUser = await getMyInfo();
     }
   }
-// ----------------------------------------------------
+
+  // ----------------------------------------------------
   // 🗑️ 회원탈퇴 (계정 삭제)
   // ----------------------------------------------------
   static Future<bool> withdrawAccount() async {

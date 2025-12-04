@@ -1,9 +1,17 @@
+// lib/screens/chat/services/chat_timer_service.dart
+
 import 'dart:async';
+import 'package:flutter/foundation.dart'; // VoidCallback 정의를 위해 추가
 
 /// 채팅 메시지 타이머 관리 서비스
 /// 60초 카운트다운 타이머를 관리합니다.
 class ChatTimerService {
   /// 카운트다운 시작
+  ///
+  /// [messageId] : 해당 타이머가 연결된 메시지 ID
+  /// [durationSeconds] : 남은 초
+  /// [onTick] : 매 초마다 (messageId, remainingSeconds) 콜백
+  /// [onComplete] : 0초가 되었을 때 호출
   static Timer startCountdown(
     int messageId,
     int durationSeconds,
@@ -25,7 +33,7 @@ class ChatTimerService {
 
   /// 모든 타이머 취소
   static void cancelAllTimers(Map<int, Timer> timers) {
-    for (var timer in timers.values) {
+    for (final timer in timers.values) {
       timer.cancel();
     }
     timers.clear();
@@ -37,4 +45,3 @@ class ChatTimerService {
     timers.remove(messageId);
   }
 }
-
