@@ -99,14 +99,14 @@ class ApiService {
   }
 
   // ----------------------------------------------------
-  // 내 정보 가져오기
+  // 내 정보 가져오기 (여러 학교 포함)
   // ----------------------------------------------------
   static Future<User> getMyInfo() async {
     final url = Uri.parse("${ApiConfig.baseUrl}/users/me");
     final response = await http.get(url, headers: _headers(json: false));
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
 
       return User(
         id: data["id"],
@@ -124,6 +124,14 @@ class ApiService {
         profileFeedImages: (data["feed_images"] != null)
             ? List<String>.from(data["feed_images"])
             : [],
+        // ✅ 여러 학교 정보 (백엔드가 내려줄 경우)
+        schools: (data["schools"] != null)
+            ? List<Map<String, dynamic>>.from(
+                (data["schools"] as List).map(
+                  (e) => Map<String, dynamic>.from(e as Map),
+                ),
+              )
+            : null,
       );
     } else {
       throw Exception("내 정보 불러오기 실패: ${response.body}");
@@ -163,39 +171,60 @@ class ApiService {
   }
 
   // ----------------------------------------------------
-  // 내 정보 업데이트
+  // 내 정보 업데이트 (여러 학교 + 레거시 백엔드 호환)
   // ----------------------------------------------------
   static Future<Map<String, dynamic>> updateMyInfo(
       Map<String, dynamic> data) async {
     final url = Uri.parse('${ApiConfig.baseUrl}/users/me');
 
-    final body = <String, dynamic>{
-      if (data["name"] != null) "name": data["name"],
-      if (data["nickname"] != null) "nickname": data["nickname"],
-      if (data["birth_year"] != null) "birth_year": data["birth_year"],
-      if (data["gender"] != null) "gender": data["gender"],
-      if (data["region"] != null) "region": data["region"],
-      if (data["school_name"] != null) "school_name": data["school_name"],
-      if (data["school_type"] != null) "school_type": data["school_type"],
-      if (data["admission_year"] != null)
-        "admission_year": data["admission_year"],
-      if (data["profile_image"] != null)
-        "profile_image": data["profile_image"],
-      if (data["background_image"] != null)
-        "background_image": data["background_image"],
-    };
-
-    final response = await http.put(
-      url,
-      headers: _headers(),
-      body: jsonEncode(body),
-    );
-
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+    Map<String, dynamic> _buildBody({required bool includeSchools}) {
+      final body = <String, dynamic>{
+        if (data["name"] != null) "name": data["name"],
+        if (data["nickname"] != null) "nickname": data["nickname"],
+        if (data["birth_year"] != null) "birth_year": data["birth_year"],
+        if (data["gender"] != null) "gender": data["gender"],
+        if (data["region"] != null) "region": data["region"],
+        if (data["school_name"] != null) "school_name": data["school_name"],
+        if (data["school_type"] != null) "school_type": data["school_type"],
+        if (data["admission_year"] != null)
+          "admission_year": data["admission_year"],
+        if (data["profile_image"] != null)
+          "profile_image": data["profile_image"],
+        if (data["background_image"] != null)
+          "background_image": data["background_image"],
+        // ✅ 여러 학교 정보
+        if (includeSchools && data["schools"] != null)
+          "schools": data["schools"],
+      };
+      return body;
     }
 
-    throw Exception('내 정보 업데이트 실패: ${response.body}');
+    Future<http.Response> _request({required bool includeSchools}) {
+      return http.put(
+        url,
+        headers: _headers(),
+        body: jsonEncode(_buildBody(includeSchools: includeSchools)),
+      );
+    }
+
+    // 1차: schools 포함해서 시도
+    var response = await _request(includeSchools: true);
+
+    // 🔁 레거시 백엔드 호환:
+    // Azure 쪽 백엔드가 schools 필드를 모르면 422가 날 수 있어서
+    // 이 경우에는 schools 빼고 한 번 더 호출
+    if (response.statusCode == 422 && data["schools"] != null) {
+      response = await _request(includeSchools: false);
+    }
+
+    if (response.statusCode == 200) {
+      return jsonDecode(utf8.decode(response.bodyBytes))
+          as Map<String, dynamic>;
+    }
+
+    throw Exception(
+      '내 정보 업데이트 실패: ${response.statusCode} ${response.body}',
+    );
   }
 
   // ----------------------------------------------------
@@ -509,7 +538,7 @@ class ApiService {
     return response.statusCode == 200 || response.statusCode == 204;
   }
 
-  // ✅ 댓글 수정 (로컬 최종 구현 맞춰 추가)
+  // ✅ 댓글 수정
   static Future<Map<String, dynamic>> updateComment(
     int postId,
     int commentId,
