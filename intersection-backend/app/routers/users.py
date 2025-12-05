@@ -7,8 +7,8 @@ from sqlalchemy import or_
 # 🔥 스키마 및 모델 임포트
 from ..schemas import UserCreate, UserRead, UserUpdate, Token, NotificationRead
 from ..models import (
-    User, Post, Comment, UserFriendship, ChatRoom, ChatMessage, 
-    UserBlock, UserReport, PostLike, CommentLike, PostReport, 
+    User, Post, Comment, UserFriendship, ChatRoom, ChatMessage,
+    UserBlock, UserReport, PostLike, CommentLike, PostReport,
     CommentReport, Notification
 )
 from ..db import engine
@@ -22,6 +22,7 @@ from ..dependencies import get_current_user
 router = APIRouter(tags=["users"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token")
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -57,7 +58,8 @@ def create_user(data: UserCreate):
         # 여러 학교 정보를 JSON 형식으로 저장
         schools_json = None
         if data.schools:
-            schools_json = data.schools
+            # ✅ Pydantic 객체 → dict 로 변환해서 JSONB 컬럼에 저장
+            schools_json = [s.dict() for s in data.schools]
         elif data.school_name:  # 하위 호환성: 기존 단일 학교 정보를 JSON으로 변환
             schools_json = [{
                 "name": data.school_name,
@@ -66,16 +68,16 @@ def create_user(data: UserCreate):
             }]
 
         user = User(
-            login_id=data.login_id, 
-            name=data.name, 
-            nickname=data.nickname, 
-            birth_year=data.birth_year, 
+            login_id=data.login_id,
+            name=data.name,
+            nickname=data.nickname,
+            birth_year=data.birth_year,
             gender=data.gender,
-            region=data.region, 
-            school_name=data.school_name,  # 하위 호환성
-            school_type=data.school_type,  # 하위 호환성
-            admission_year=data.admission_year,  # 하위 호환성
-            schools=schools_json,  # 여러 학교 정보 (JSON)
+            region=data.region,
+            school_name=data.school_name,          # 하위 호환성
+            school_type=data.school_type,          # 하위 호환성
+            admission_year=data.admission_year,    # 하위 호환성
+            schools=schools_json,                  # 여러 학교 정보 (JSON)
             email=data.login_id,
             phone=data.phone,
             profile_image=data.profile_image,
@@ -93,16 +95,18 @@ def create_user(data: UserCreate):
         session.refresh(user)
 
         return UserRead(
-            id=user.id, 
+            id=user.id,
             name=user.name,
             nickname=user.nickname,
             birth_year=user.birth_year,
             gender=user.gender,
-            region=user.region, 
-            school_name=user.school_name,  # 하위 호환성
-            school_type=user.school_type,  # 하위 호환성
-            admission_year=user.admission_year,  # 하위 호환성
-            schools=user.schools if isinstance(user.schools, list) else (list(user.schools.values()) if user.schools else None),  # 여러 학교 정보 (JSON)
+            region=user.region,
+            school_name=user.school_name,          # 하위 호환성
+            school_type=user.school_type,          # 하위 호환성
+            admission_year=user.admission_year,    # 하위 호환성
+            # DB에는 list[dict] 로 들어있고, Pydantic 이 알아서 SchoolRead 리스트로 파싱해줌
+            schools=user.schools if isinstance(user.schools, list)
+            else (list(user.schools.values()) if user.schools else None),
             phone=user.phone,
             profile_image=user.profile_image,
             background_image=user.background_image,
@@ -124,16 +128,17 @@ def get_my_info(current_user: User = Depends(get_current_user)):
         feed_images_list = [post.image_url for post in my_posts if post.image_url]
 
         return UserRead(
-            id=current_user.id, 
-            name=current_user.name, 
+            id=current_user.id,
+            name=current_user.name,
             nickname=current_user.nickname,
             birth_year=current_user.birth_year,
             gender=current_user.gender,
-            region=current_user.region, 
-            school_name=current_user.school_name,  # 하위 호환성
-            school_type=current_user.school_type,  # 하위 호환성
-            admission_year=current_user.admission_year,  # 하위 호환성
-            schools=current_user.schools if isinstance(current_user.schools, list) else (list(current_user.schools.values()) if current_user.schools else None),  # 여러 학교 정보 (JSON)
+            region=current_user.region,
+            school_name=current_user.school_name,          # 하위 호환성
+            school_type=current_user.school_type,          # 하위 호환성
+            admission_year=current_user.admission_year,    # 하위 호환성
+            schools=current_user.schools if isinstance(current_user.schools, list)
+            else (list(current_user.schools.values()) if current_user.schools else None),
             phone=current_user.phone,
             profile_image=current_user.profile_image,
             background_image=current_user.background_image,
@@ -153,7 +158,7 @@ def get_user_by_id_api(
         user = get_user_by_id(session, user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # 해당 사용자의 게시글 이미지들 (피드용)
         statement = (
             select(Post)
@@ -163,18 +168,19 @@ def get_user_by_id_api(
         )
         user_posts = session.exec(statement).all()
         feed_images_list = [post.image_url for post in user_posts if post.image_url]
-        
+
         return UserRead(
-            id=user.id, 
-            name=user.name, 
+            id=user.id,
+            name=user.name,
             nickname=user.nickname,
             birth_year=user.birth_year,
             gender=user.gender,
-            region=user.region, 
-            school_name=user.school_name,  # 하위 호환성
-            school_type=user.school_type,  # 하위 호환성
-            admission_year=user.admission_year,  # 하위 호환성
-            schools=user.schools if isinstance(user.schools, list) else (list(user.schools.values()) if user.schools else None),  # 여러 학교 정보 (JSON)
+            region=user.region,
+            school_name=user.school_name,          # 하위 호환성
+            school_type=user.school_type,          # 하위 호환성
+            admission_year=user.admission_year,    # 하위 호환성
+            schools=user.schools if isinstance(user.schools, list)
+            else (list(user.schools.values()) if user.schools else None),
             phone=user.phone,
             profile_image=user.profile_image,
             background_image=user.background_image,
@@ -190,15 +196,14 @@ def recommended(current_user: User = Depends(get_current_user)):
     - 여기서는 그냥 받아서 넘겨주기만 하면 됩니다. (중복 제거됨)
     """
     with Session(engine) as session:
-        # ✅ await 없이 일반 함수로 호출 (Redis 없음)
         friends = get_recommended_friends(session, current_user)
-        
+
         return [
             UserRead(
-                id=u.id, 
-                name=u.name, 
-                birth_year=u.birth_year, 
-                region=u.region, 
+                id=u.id,
+                name=u.name,
+                birth_year=u.birth_year,
+                region=u.region,
                 school_name=u.school_name,
                 profile_image=u.profile_image,
                 background_image=u.background_image
@@ -217,23 +222,32 @@ def update_my_info(data: UserUpdate, token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
     with Session(engine) as session:
-        # 순환 참조 방지를 위해 여기서 직접 조회하거나 get_user_by_id를 별도로 구현
-        # 여기서는 Session으로 직접 조회
         user = session.get(User, int(user_id))
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
         # 필드 업데이트
-        if data.name is not None: user.name = data.name
-        if data.nickname is not None: user.nickname = data.nickname
-        if data.birth_year is not None: user.birth_year = data.birth_year
-        if data.gender is not None: user.gender = data.gender
-        if data.region is not None: user.region = data.region
-        if data.school_name is not None: user.school_name = data.school_name  # 하위 호환성
-        if data.school_type is not None: user.school_type = data.school_type  # 하위 호환성
-        if data.admission_year is not None: user.admission_year = data.admission_year  # 하위 호환성
-        if data.schools is not None: user.schools = data.schools  # 여러 학교 정보 (JSON)
-        
+        if data.name is not None:
+            user.name = data.name
+        if data.nickname is not None:
+            user.nickname = data.nickname
+        if data.birth_year is not None:
+            user.birth_year = data.birth_year
+        if data.gender is not None:
+            user.gender = data.gender
+        if data.region is not None:
+            user.region = data.region
+        if data.school_name is not None:
+            user.school_name = data.school_name      # 하위 호환성
+        if data.school_type is not None:
+            user.school_type = data.school_type      # 하위 호환성
+        if data.admission_year is not None:
+            user.admission_year = data.admission_year  # 하위 호환성
+
+        if data.schools is not None:
+            # ✅ 여기서도 list[SchoolCreate] → list[dict]
+            user.schools = [s.dict() for s in data.schools]
+
         if data.profile_image is not None:
             user.profile_image = data.profile_image
         if data.background_image is not None:
@@ -260,20 +274,21 @@ def update_my_info(data: UserUpdate, token: str = Depends(oauth2_scheme)):
         feed_images_list = [post.image_url for post in my_posts if post.image_url]
 
         return UserRead(
-            id=user.id, 
+            id=user.id,
             name=user.name,
             nickname=user.nickname,
             birth_year=user.birth_year,
             gender=user.gender,
-            region=user.region, 
-            school_name=user.school_name,  # 하위 호환성
-            school_type=user.school_type,  # 하위 호환성
-            admission_year=user.admission_year,  # 하위 호환성
-            schools=user.schools if isinstance(user.schools, list) else (list(user.schools.values()) if user.schools else None),  # 여러 학교 정보 (JSON)
+            region=user.region,
+            school_name=user.school_name,          # 하위 호환성
+            school_type=user.school_type,          # 하위 호환성
+            admission_year=user.admission_year,    # 하위 호환성
+            schools=user.schools if isinstance(user.schools, list)
+            else (list(user.schools.values()) if user.schools else None),
             phone=user.phone,
             profile_image=user.profile_image,
             background_image=user.background_image,
-            feed_images=feed_images_list 
+            feed_images=feed_images_list
         )
 
 
@@ -291,23 +306,23 @@ def get_my_notifications(current_user: User = Depends(get_current_user)):
             .order_by(Notification.created_at.desc())
         )
         results = session.exec(statement).all()
-        
+
         notif_list = []
         for notif, sender in results:
             sender_name = sender.name or sender.nickname or "알 수 없음"
-            
+
             notif_list.append(NotificationRead(
                 id=notif.id,
                 sender_id=notif.sender_id,
                 sender_name=sender_name,
-                sender_profile_image=sender.profile_image, 
+                sender_profile_image=sender.profile_image,
                 type=notif.type,
                 message=notif.message,
                 related_post_id=notif.related_post_id,
                 is_read=notif.is_read,
                 created_at=notif.created_at.isoformat()
             ))
-            
+
         return notif_list
 
 
@@ -316,7 +331,7 @@ def get_my_notifications(current_user: User = Depends(get_current_user)):
 # ------------------------------------------------------
 @router.get("/users/search", response_model=List[UserRead])
 def search_users(
-    keyword: str, 
+    keyword: str,
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -332,76 +347,66 @@ def search_users(
                 User.nickname.contains(keyword)
             )
         ).where(User.id != current_user.id)  # 나 자신은 검색 제외
-        
-        # 차단한 유저 제외가 필요하면 여기에 추가
-        
-        results = session.exec(statement).limit(20).all() # 최대 20명만
-        
+
+        results = session.exec(statement).limit(20).all()  # 최대 20명만
+
         return [
             UserRead(
-                id=u.id, 
-                name=u.name, 
+                id=u.id,
+                name=u.name,
                 nickname=u.nickname,
-                birth_year=u.birth_year, 
-                region=u.region, 
+                birth_year=u.birth_year,
+                region=u.region,
                 school_name=u.school_name,
                 profile_image=u.profile_image,
                 background_image=u.background_image
             ) for u in results
         ]
 
+
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
 def withdraw_account(current_user: User = Depends(get_current_user)):
     """
     🗑️ 회원탈퇴 (계정 삭제)
-    - 사용자의 모든 활동 데이터(게시글, 댓글, 좋아요, 친구, 채팅 등)를 먼저 삭제합니다.
-    - 마지막으로 사용자 정보를 DB에서 완전히 삭제합니다.
-    - 삭제 후에는 로그인이 불가능합니다.
     """
     with Session(engine) as session:
-        # 현재 세션에서 유저를 다시 조회 (안전한 삭제를 위해)
         user_in_db = session.get(User, current_user.id)
         if not user_in_db:
-            return # 이미 삭제된 경우
+            return  # 이미 삭제된 경우
 
         user_id = user_in_db.id
-        
+
         # 1. 💬 채팅 관련 데이터 삭제
         chat_rooms = session.exec(
             select(ChatRoom).where(
                 or_(ChatRoom.user1_id == user_id, ChatRoom.user2_id == user_id)
             )
         ).all()
-        
+
         for room in chat_rooms:
-            # 채팅방의 모든 메시지 삭제
             messages = session.exec(select(ChatMessage).where(ChatMessage.room_id == room.id)).all()
             for msg in messages:
                 session.delete(msg)
-            # 채팅방 자체 삭제
             session.delete(room)
 
         # 2. 📝 내 게시글과 그 하위 데이터 삭제
         my_posts = session.exec(select(Post).where(Post.author_id == user_id)).all()
         for post in my_posts:
-            # 댓글 삭제
             comments = session.exec(select(Comment).where(Comment.post_id == post.id)).all()
             for comment in comments:
-                # 댓글 좋아요/신고 삭제
                 for cl in session.exec(select(CommentLike).where(CommentLike.comment_id == comment.id)).all():
                     session.delete(cl)
                 for cr in session.exec(select(CommentReport).where(CommentReport.reported_comment_id == comment.id)).all():
                     session.delete(cr)
                 session.delete(comment)
-            
-            # 게시글 좋아요/신고/알림 삭제
+
             for pl in session.exec(select(PostLike).where(PostLike.post_id == post.id)).all():
                 session.delete(pl)
             for pr in session.exec(select(PostReport).where(PostReport.reported_post_id == post.id)).all():
                 session.delete(pr)
             for n in session.exec(select(Notification).where(Notification.related_post_id == post.id)).all():
                 session.delete(n)
-            
+
             session.delete(post)
 
         # 3. ✍️ 내가 쓴 댓글 삭제
@@ -423,27 +428,31 @@ def withdraw_account(current_user: User = Depends(get_current_user)):
             session.delete(pr)
         for cr in session.exec(select(CommentReport).where(CommentReport.reporter_id == user_id)).all():
             session.delete(cr)
-        
+
         user_reports = session.exec(select(UserReport).where(
             or_(UserReport.reporter_id == user_id, UserReport.reported_user_id == user_id)
         )).all()
-        for ur in user_reports: session.delete(ur)
+        for ur in user_reports:
+            session.delete(ur)
 
         user_blocks = session.exec(select(UserBlock).where(
             or_(UserBlock.user_id == user_id, UserBlock.blocked_user_id == user_id)
         )).all()
-        for ub in user_blocks: session.delete(ub)
+        for ub in user_blocks:
+            session.delete(ub)
 
         # 5. 🤝 친구 관계 및 알림 삭제
         friendships = session.exec(select(UserFriendship).where(
             or_(UserFriendship.user_id == user_id, UserFriendship.friend_user_id == user_id)
         )).all()
-        for f in friendships: session.delete(f)
+        for f in friendships:
+            session.delete(f)
 
         notifications = session.exec(select(Notification).where(
             or_(Notification.receiver_id == user_id, Notification.sender_id == user_id)
         )).all()
-        for n in notifications: session.delete(n)
+        for n in notifications:
+            session.delete(n)
 
         # 6. 👤 [최종] 사용자 정보 삭제
         session.delete(user_in_db)
