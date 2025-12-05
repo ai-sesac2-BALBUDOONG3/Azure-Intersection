@@ -29,8 +29,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // 지역 선택
   String? selectedRegion;
   final List<String> regions = [
-    '서울', '부산', '대구', '인천', '광주', '대전', '울산',
-    '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
+    '서울',
+    '부산',
+    '대구',
+    '인천',
+    '광주',
+    '대전',
+    '울산',
+    '경기',
+    '강원',
+    '충북',
+    '충남',
+    '전북',
+    '전남',
+    '경북',
+    '경남',
+    '제주',
   ];
 
   // 여러 학교 정보
@@ -47,7 +61,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       // 서버에서 최신 사용자 정보 가져오기
       final user = await ApiService.getMyInfo();
-      
+
       // AppState 업데이트
       AppState.currentUser = user;
       await UserStorage.save(user);
@@ -56,11 +70,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       setState(() {
         nameController = TextEditingController(text: user.name);
-        nicknameController = TextEditingController(text: user.nickname ?? "");
+        nicknameController =
+            TextEditingController(text: user.nickname ?? "");
         regionController = TextEditingController(text: user.region);
         selectedRegion = user.region.isNotEmpty ? user.region : null;
 
-        birthYearController = TextEditingController(text: user.birthYear.toString());
+        birthYearController =
+            TextEditingController(text: user.birthYear.toString());
 
         genderValue = user.gender; // 서버 값 사용
 
@@ -107,6 +123,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
+  // ✅ 서버 기준으로 저장 & 동기화
   Future<void> _saveProfile() async {
     final user = AppState.currentUser!;
 
@@ -125,63 +142,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ? schools[0]
         : null;
 
-    // 1) 서버 업데이트 (가능한 필드만 전송)
+    // 서버로 보낼 payload (가능한 필드만 전송)
     final payload = <String, dynamic>{
-      "name": nameController.text.trim(),
+      // 이름은 화면에서 수정 불가이므로 기존 값 유지
+      "name": user.name,
       if (nicknameController.text.trim().isNotEmpty)
         "nickname": nicknameController.text.trim(),
       if (birthYearController.text.trim().isNotEmpty)
         "birth_year": int.tryParse(birthYearController.text.trim()),
-      if (genderValue != null && genderValue!.isNotEmpty) "gender": genderValue,
+      if (genderValue != null && genderValue!.isNotEmpty)
+        "gender": genderValue,
       if (selectedRegion != null && selectedRegion!.isNotEmpty)
         "region": selectedRegion,
-      if (firstSchool != null) "school_name": firstSchool.name,  // 하위 호환성
+      if (firstSchool != null) "school_name": firstSchool.name, // 하위 호환성
       if (firstSchool != null && firstSchool.schoolType != null)
-        "school_type": firstSchool.schoolType,  // 하위 호환성
+        "school_type": firstSchool.schoolType, // 하위 호환성
       if (firstSchool != null && firstSchool.admissionYear != null)
-        "admission_year": firstSchool.admissionYear,  // 하위 호환성
-      if (schoolsJson.isNotEmpty) "schools": schoolsJson,  // 여러 학교 정보 (JSON 형식)
+        "admission_year": firstSchool.admissionYear, // 하위 호환성
+      if (schoolsJson.isNotEmpty) "schools": schoolsJson, // 여러 학교 정보
     };
 
     try {
+      // 1) 서버 업데이트
       await ApiService.updateMyInfo(payload);
 
-      // 2) 로컬 메모리/스토리지 동기화 (현재 모델이 가진 필드만 반영)
-        final updated = User(
-        id: user.id,
-        name: nameController.text.trim().isEmpty
-            ? user.name
-            : nameController.text.trim(),
-        nickname: nicknameController.text.trim().isEmpty
-          ? user.nickname
-          : nicknameController.text.trim(),
-        birthYear: int.tryParse(birthYearController.text.trim()) ??
-            user.birthYear,
-        gender: (genderValue == null || genderValue!.isEmpty)
-          ? user.gender
-          : genderValue,
-        region: (selectedRegion != null && selectedRegion!.isNotEmpty)
-            ? selectedRegion!
-            : user.region,
-        school: (firstSchool != null && firstSchool.name.isNotEmpty)
-            ? firstSchool.name
-            : user.school,  // 하위 호환성
-        schoolType: (firstSchool != null && firstSchool.schoolType != null)
-          ? firstSchool.schoolType
-          : user.schoolType,  // 하위 호환성
-        admissionYear: (firstSchool != null && firstSchool.admissionYear != null)
-          ? firstSchool.admissionYear
-          : user.admissionYear,  // 하위 호환성
-        schools: schoolsJson.isNotEmpty ? schoolsJson : user.schools,  // 여러 학교 정보 (JSON)
-        profileImageUrl: user.profileImageUrl,
-        backgroundImageUrl: user.backgroundImageUrl,
-        profileImageBytes: user.profileImageBytes,
-        backgroundImageBytes: user.backgroundImageBytes,
-        profileFeedImages: user.profileFeedImages,
-      );
-
-      AppState.currentUser = updated;
-      await UserStorage.save(updated);
+      // 2) 서버 기준 최신 정보 다시 가져오기
+      final refreshed = await ApiService.getMyInfo();
+      AppState.currentUser = refreshed;
+      await UserStorage.save(refreshed);
 
       if (!mounted) return;
       Navigator.pop(context, true); // true를 반환하여 프로필 화면 갱신
@@ -251,13 +239,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _buildSection(
             title: "학교 정보",
             children: [
-              const Text('기본 지역', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const Text('기본 지역',
+                  style:
+                      TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: selectedRegion,
                 hint: const Text('지역을 선택해주세요'),
                 items: regions
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .map((e) =>
+                        DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
                 onChanged: (v) => setState(() => selectedRegion = v),
                 decoration: InputDecoration(
@@ -287,10 +278,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: FilledButton(
               onPressed: _saveProfile,
               style: ButtonStyle(
-                backgroundColor: MaterialStateProperty.all(Colors.black87),
-                foregroundColor: MaterialStateProperty.all(Colors.white),
+                backgroundColor:
+                    MaterialStateProperty.all(Colors.black87),
+                foregroundColor:
+                    MaterialStateProperty.all(Colors.white),
                 elevation: MaterialStateProperty.all(6),
-                shadowColor: MaterialStateProperty.all(Colors.black54),
+                shadowColor:
+                    MaterialStateProperty.all(Colors.black54),
                 shape: MaterialStateProperty.all(
                   RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -300,15 +294,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   const EdgeInsets.symmetric(vertical: 14),
                 ),
                 textStyle: MaterialStateProperty.all(
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
                 ),
               ),
               child: const Text("저장"),
             ),
           ),
-
           const SizedBox(height: 40),
-// 🗑️ 회원탈퇴 버튼 추가
+          // 🗑️ 회원탈퇴 버튼
           Center(
             child: TextButton(
               onPressed: () => _showWithdrawConfirmDialog(context),
@@ -317,7 +311,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: TextStyle(
                   color: Colors.grey.shade500,
                   fontSize: 14,
-                  decoration: TextDecoration.underline, // 밑줄 추가
+                  decoration: TextDecoration.underline,
                 ),
               ),
             ),
@@ -328,7 +322,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildSection({required String title, required List<Widget> children}) {
+  Widget _buildSection(
+      {required String title, required List<Widget> children}) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -357,48 +352,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ...children,
         ],
       ),
-    );
-  }
-
-  Widget _buildField(String label, TextEditingController ctrl,
-      {bool number = false, String? hint}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.black54,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: ctrl,
-          keyboardType: number ? TextInputType.number : TextInputType.text,
-          style: const TextStyle(fontSize: 16),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.black87, width: 2),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -437,7 +390,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         const SizedBox(height: 8),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: Colors.grey.shade100,
             borderRadius: BorderRadius.circular(12),
@@ -454,7 +408,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                 ),
               ),
-              Icon(Icons.lock_outline, size: 18, color: Colors.grey.shade400),
+              Icon(Icons.lock_outline,
+                  size: 18, color: Colors.grey.shade400),
             ],
           ),
         ),
@@ -462,47 +417,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(Icons.info_outline, size: 14, color: Colors.grey.shade600),
+              Icon(Icons.info_outline,
+                  size: 14, color: Colors.grey.shade600),
               const SizedBox(width: 4),
               Text(
                 helper,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(
+                    fontSize: 12, color: Colors.grey.shade600),
               ),
             ],
           ),
         ]
-      ],
-    );
-  }
-
-  Widget _buildDropdown<T>({
-    required String label,
-    required T? value,
-    required List<DropdownMenuItem<T>> items,
-    required void Function(T?) onChanged,
-    bool enabled = true,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: DropdownButton<T>(
-            value: value,
-            isExpanded: true,
-            underline: const SizedBox.shrink(),
-            items: items,
-            onChanged: enabled ? onChanged : null,
-            hint: const Text('선택'),
-          ),
-        ),
       ],
     );
   }
@@ -557,12 +482,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop(),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: Colors.grey.shade300),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14),
+                          side: BorderSide(
+                              color: Colors.grey.shade300),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius:
+                                BorderRadius.circular(12),
                           ),
                         ),
                         child: Text(
@@ -584,15 +513,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           if (!context.mounted) return;
                           Navigator.pushAndRemoveUntil(
                             context,
-                            MaterialPageRoute(builder: (_) => const LandingScreen()),
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const LandingScreen()),
                             (route) => false,
                           );
                         },
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.red.shade400,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius:
+                                BorderRadius.circular(12),
                           ),
                         ),
                         child: const Text(
@@ -613,7 +546,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       },
     );
   }
-// 🗑️ 회원탈퇴 확인 다이얼로그
+
+  // 🗑️ 회원탈퇴 확인 다이얼로그
   void _showWithdrawConfirmDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -664,12 +598,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop(),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: Colors.grey.shade300),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14),
+                          side: BorderSide(
+                              color: Colors.grey.shade300),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius:
+                                BorderRadius.circular(12),
                           ),
                         ),
                         child: Text(
@@ -688,42 +626,53 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         onPressed: () async {
                           // 다이얼로그 닫기
                           Navigator.of(dialogContext).pop();
-                          
+
                           try {
                             // 1. 서버에 탈퇴 요청
-                            final success = await ApiService.withdrawAccount();
-                            
+                            final success =
+                                await ApiService.withdrawAccount();
+
                             if (success) {
                               // 2. 앱 내 데이터 초기화 (로그아웃과 동일)
                               await AppState.logout();
-                              
+
                               if (!context.mounted) return;
-                              
+
                               // 3. 로그인 화면(랜딩 페이지)으로 이동
                               Navigator.pushAndRemoveUntil(
                                 context,
-                                MaterialPageRoute(builder: (_) => const LandingScreen()),
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const LandingScreen()),
                                 (route) => false,
                               );
-                              
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('회원탈퇴가 완료되었습니다.')),
+
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(
+                                const SnackBar(
+                                    content:
+                                        Text('회원탈퇴가 완료되었습니다.')),
                               );
                             } else {
                               throw Exception("서버 응답 오류");
                             }
                           } catch (e) {
                             if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('회원탈퇴 실패: $e')),
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(
+                              SnackBar(
+                                  content:
+                                      Text('회원탈퇴 실패: $e')),
                             );
                           }
                         },
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red.shade600, // 더 진한 빨강
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: Colors.red.shade600,
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius:
+                                BorderRadius.circular(12),
                           ),
                         ),
                         child: const Text(

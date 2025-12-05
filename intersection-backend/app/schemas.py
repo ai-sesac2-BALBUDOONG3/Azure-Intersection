@@ -19,7 +19,7 @@ class TokenData(BaseModel):
 class SchoolCreate(BaseModel):
     """회원가입 시 학교 정보"""
     name: str
-    type: str
+    school_type: str                  # ✅ 프론트에서 오는 필드명과 맞춤
     admission_year: Optional[int] = None
 
 
@@ -27,7 +27,7 @@ class SchoolRead(BaseModel):
     """조회용 학교 정보"""
     id: Optional[int] = None
     name: str
-    type: str
+    school_type: str                  # ✅ 동일하게 유지
     admission_year: Optional[int] = None
 
 
@@ -48,8 +48,9 @@ class UserCreate(BaseModel):
     school_type: Optional[str] = None
     admission_year: Optional[int] = None
 
-    # ✅ 다중 학교 등록용 (로컬에서 사용하던 구조)
-    schools: Optional[List[SchoolCreate]] = []
+    # ✅ 다중 학교 등록용
+    # 프론트에서 body.schools[0] = {name, school_type, admission_year}
+    schools: Optional[List[SchoolCreate]] = None
 
     profile_image: Optional[str] = None
     background_image: Optional[str] = None
@@ -69,8 +70,8 @@ class UserRead(BaseModel):
     school_type: Optional[str] = None
     admission_year: Optional[int] = None
 
-    # 학교 목록 전체
-    schools: Optional[List[SchoolRead]] = []
+    # 전체 학교 목록
+    schools: Optional[List[SchoolRead]] = None
 
     phone: Optional[str] = None
     profile_image: Optional[str] = None
