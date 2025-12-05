@@ -1,3 +1,5 @@
+# 파일 경로: intersection-backend/app/main.py
+
 import os
 import logging
 from fastapi import FastAPI
@@ -23,9 +25,21 @@ app = FastAPI(title="Intersection Backend")
 logger = logging.getLogger("uvicorn.error")
 
 # ✅ CORS 설정
+origins = settings.allowed_origins_list
+
+# ALLOWED_ORIGINS가 비어 있거나 파싱 실패했을 때를 위한 안전장치
+if not origins:
+    logger.warning(
+        "ALLOWED_ORIGINS is empty or invalid. "
+        "Temporarily allowing all origins for CORS."
+    )
+    origins = ["*"]
+
+logger.info(f"✅ CORS allowed_origins: {origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
+    allow_origins=origins,          # 🔥 리스트 형태로 전달
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
