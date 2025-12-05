@@ -1,3 +1,5 @@
+# 파일 경로: intersection-backend/app/schemas.py
+
 from typing import Optional, List
 from pydantic import BaseModel
 
@@ -88,9 +90,14 @@ class UserUpdate(BaseModel):
     gender: Optional[str] = None
     region: Optional[str] = None
 
+    # 하위 호환용 단일 학교
     school_name: Optional[str] = None
     school_type: Optional[str] = None
     admission_year: Optional[int] = None
+
+    # ✅ 여러 학교 정보 업데이트용 (EditProfileScreen 에서 보내는 schools)
+    # body.schools = [{ "name": ..., "school_type": ..., "admission_year": ... }, ...]
+    schools: Optional[List[SchoolCreate]] = None
 
     profile_image: Optional[str] = None
     background_image: Optional[str] = None
