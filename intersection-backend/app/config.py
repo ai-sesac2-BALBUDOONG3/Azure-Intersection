@@ -14,44 +14,63 @@ class Settings:
     """Pydantic 없이 환경 변수 기반 설정"""
 
     def __init__(self):
-        # 기본 환경
+        # ===== 기본 환경 =====
         self.ENV: str = os.getenv("ENV", "development")
 
-        # JWT 설정
-        self.JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-for-local-testing")
+        # ===== JWT 설정 =====
+        self.JWT_SECRET: str = os.getenv(
+            "JWT_SECRET",
+            "dev-secret-for-local-testing",
+        )
         self.ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
         )
 
-        # DB 연결
+        # ===== DB 연결 =====
         self.DATABASE_URL: str = os.getenv(
-            "DATABASE_URL", "sqlite:///./intersection_dev.db"
+            "DATABASE_URL",
+            "sqlite:///./intersection_dev.db",
         )
 
-        # CORS 허용 도메인
+        # ===== CORS 허용 도메인 =====
         self.ALLOWED_ORIGINS: str = os.getenv(
             "ALLOWED_ORIGINS",
-            "http://localhost:3000,http://localhost:5173,https://jolly-sand-0dcc3e60f.3.azurestaticapps.net",
+            "http://localhost:3000,"
+            "http://localhost:5173,"
+            "https://jolly-sand-0dcc3e60f.3.azurestaticapps.net",
         )
 
-        # Azure OpenAI
+        # ===== Azure OpenAI =====
         self.AZURE_OPENAI_ENDPOINT: str = os.getenv("AZURE_OPENAI_ENDPOINT", "")
         self.AZURE_OPENAI_API_KEY: str = os.getenv("AZURE_OPENAI_API_KEY", "")
         self.AZURE_OPENAI_API_VERSION: str = os.getenv(
-            "AZURE_OPENAI_API_VERSION", "2024-06-01"
+            "AZURE_OPENAI_API_VERSION",
+            "2024-06-01",
         )
         self.AZURE_OPENAI_CHAT_DEPLOYMENT: str = os.getenv(
-            "AZURE_OPENAI_CHAT_DEPLOYMENT", ""
+            "AZURE_OPENAI_CHAT_DEPLOYMENT",
+            "",
         )
         self.AZURE_OPENAI_EMBEDDING_DEPLOYMENT: str = os.getenv(
-            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT", ""
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+            "",
         )
 
-        # Kakao OAuth
+        # ===== Kakao OAuth =====
         self.KAKAO_CLIENT_ID: str = os.getenv("KAKAO_CLIENT_ID", "")
         self.KAKAO_CLIENT_SECRET: str = os.getenv("KAKAO_CLIENT_SECRET", "")
         self.KAKAO_REDIRECT_URI: str = os.getenv(
-            "KAKAO_REDIRECT_URI", "http://127.0.0.1:8000/auth/kakao/callback"
+            "KAKAO_REDIRECT_URI",
+            "http://127.0.0.1:8000/auth/kakao/callback",
+        )
+
+        # ===== NEIS 학교 검색 =====
+        # ⭐ 여기 빠져 있어서 500 터졌던 부분
+        self.NEIS_API_KEY: str = os.getenv("NEIS_API_KEY", "")
+        # 필요하면 base URL도 환경변수로 빼되, 기본값은 공식 허브로
+        self.NEIS_API_BASE_URL: str = os.getenv(
+            "NEIS_API_BASE_URL",
+            "https://open.neis.go.kr/hub",
         )
 
     @property
